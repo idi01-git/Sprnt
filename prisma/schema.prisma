@@ -1,0 +1,1006 @@
+// =============================================================================
+// SPRINTERN — Prisma Schema (32 Models)
+// PostgreSQL 15+ | Prisma ORM 6.x+ | Source: SPRINTERN_DATABASE_SCHEMA_v2.md
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  student
+  @@map("user_role")
+}
+
+enum AdminRole {
+  super_admin
+  admin
+  reviewer
+  @@map("admin_role")
+}
+
+enum StudyLevel {
+  NINTH          @map("9th")
+  TENTH          @map("10th")
+  ELEVENTH       @map("11th")
+  TWELFTH        @map("12th")
+  COLLEGE_1      @map("College 1st Year")
+  COLLEGE_2      @map("College 2nd Year")
+  COLLEGE_3      @map("College 3rd Year")
+  COLLEGE_4      @map("College 4th Year")
+  GRADUATED      @map("Graduated")
+  @@map("study_level")
+}
+
+enum TokenType {
+  password_reset
+  email_verification
+  account_recovery
+  @@map("token_type")
+}
+
+enum OtpType {
+  email_verification
+  phone_verification
+  login
+  two_factor
+  @@map("otp_type")
+}
+
+enum Branch {
+  Chemical
+  Civil
+  Mechanical
+  Electrical
+  ECE
+  CS_IT          @map("CS/IT")
+  @@map("branch")
+}
+
+enum UploadStatus {
+  pending
+  uploading
+  completed
+  failed
+  @@map("upload_status")
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  refunded
+  @@map("payment_status")
+}
+
+enum ReviewStatus {
+  pending
+  under_review
+  approved
+  rejected
+  @@map("review_status")
+}
+
+enum VerificationStatus {
+  pending
+  verified
+  rejected
+  @@map("verification_status")
+}
+
+enum GradeCategory {
+  Distinction
+  First_Class    @map("First Class")
+  Pass
+  Fail
+  @@map("grade_category")
+}
+
+enum CertGrade {
+  Distinction
+  First_Class    @map("First Class")
+  Pass
+  @@map("cert_grade")
+}
+
+enum ReferralStatus {
+  pending
+  completed
+  @@map("referral_status")
+}
+
+enum WithdrawalStatus {
+  pending
+  processing
+  completed
+  rejected
+  @@map("withdrawal_status")
+}
+
+enum TransactionType {
+  course_purchase
+  referral_credit
+  withdrawal
+  refund
+  manual_credit
+  manual_debit
+  @@map("transaction_type")
+}
+
+enum TransactionStatus {
+  pending
+  completed
+  failed
+  @@map("transaction_status")
+}
+
+enum DiscountType {
+  fixed
+  percentage
+  @@map("discount_type")
+}
+
+enum DeliveryMethod {
+  in_app
+  email
+  both
+  @@map("delivery_method")
+}
+
+enum CampaignStatus {
+  draft
+  scheduled
+  sending
+  sent
+  failed
+  @@map("campaign_status")
+}
+
+enum WebhookStatus {
+  success
+  failed
+  ignored
+  @@map("webhook_status")
+}
+
+// =============================================================================
+// SECTION 1: AUTHENTICATION & USERS (5 tables)
+// =============================================================================
+
+/// TABLE 1: users
+model User {
+  id               String     @id @default(cuid())
+  email            String     @unique @db.VarChar(255)
+  hashedPassword   String?    @map("hashed_password")
+  name             String     @db.VarChar(200)
+  phone            String?    @db.VarChar(20)
+  dob              DateTime?  @db.Date
+  studyLevel       StudyLevel? @map("study_level")
+  avatarUrl        String?    @map("avatar_url")
+  role             UserRole   @default(student)
+  referralCode     String?    @unique @map("referral_code") @db.VarChar(30)
+  referralCodeActive Boolean  @default(true) @map("referral_code_active")
+  // PRISMA: referred_by uses named relation "referralsReceived"
+  referredBy       String?    @map("referred_by")
+  walletBalance    Decimal    @default(0.00) @map("wallet_balance") @db.Decimal(10, 2)
+  upiId            String?    @map("upi_id") @db.VarChar(100)
+  emailVerified    Boolean    @default(false) @map("email_verified")
+  phoneVerified    Boolean    @default(false) @map("phone_verified")
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt        DateTime?  @map("deleted_at") @db.Timestamptz()
+
+  // Relations
+  sessions              Session[]
+  oauthAccounts         OAuthAccount[]
+  authTokens            AuthToken[]
+  otpVerifications      OtpVerification[]
+  enrollments           Enrollment[]
+  videoViews            VideoView[]
+  submissions           Submission[]
+  certificates          Certificate[]
+  // PRISMA: Named relations for referral system (two FKs to same table)
+  referralsSent         Referral[]          @relation("referralsSent")
+  referralsReceived     Referral[]          @relation("referralsReceived")
+  withdrawalRequests    WithdrawalRequest[]
+  transactions          Transaction[]
+  identityVerifications IdentityVerification[]
+  notifications         Notification[]
+  promocodeUsages       PromocodeUsage[]
+
+  // BEST PRACTICE: Application logic should also check balance
+  // in a Prisma $transaction before wallet deduction.
+
+  @@index([email])
+  @@index([phone])
+  @@index([referralCode])
+  @@index([referredBy])
+  @@index([deletedAt])
+  @@index([studyLevel])
+  @@index([createdAt])
+  @@map("users")
+}
+
+/// TABLE 2: sessions (Lucia Auth)
+model Session {
+  id        String   @id
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// TABLE 3: oauth_accounts
+model OAuthAccount {
+  providerId     String @map("provider_id") @db.VarChar(50)
+  providerUserId String @map("provider_user_id") @db.VarChar(255)
+  userId         String @map("user_id")
+  email          String @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([providerId, providerUserId])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
+
+/// TABLE 4: auth_tokens
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  tokenType TokenType @map("token_type")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz()
+  usedAt    DateTime? @map("used_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenType])
+  @@index([expiresAt])
+  @@map("auth_tokens")
+}
+
+/// TABLE 5: otp_verifications
+model OtpVerification {
+  id          String   @id @default(cuid())
+  userId      String?  @map("user_id")
+  email       String?  @db.VarChar(255)
+  phone       String?  @db.VarChar(20)
+  otpHash     String   @map("otp_hash")
+  otpType     OtpType  @map("otp_type")
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz()
+  verified    Boolean  @default(false)
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5) @map("max_attempts")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, otpType])
+  @@index([phone, otpType])
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("otp_verifications")
+}
+
+// =============================================================================
+// SECTION 2: ADMIN ACCOUNTS (2 tables)
+// =============================================================================
+
+/// TABLE 6: admins
+model Admin {
+  id           String    @id @default(cuid())
+  username     String    @unique @db.VarChar(100)
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(reviewer)
+  permissions  Json?
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login") @db.Timestamptz()
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  adminSessions           AdminSession[]
+  assignedSubmissions      Submission[]
+  verifiedIdentities       IdentityVerification[] @relation("verifiedBy")
+  revokedCertificates      Certificate[]          @relation("revokedBy")
+  processedWithdrawals     WithdrawalRequest[]
+  adminTransactions        Transaction[]
+  createdPromocodes        Promocode[]
+  createdCampaigns         NotificationCampaign[]
+  updatedEmailTemplates    EmailTemplate[]
+  updatedSystemSettings    SystemSetting[]
+  grantedEnrollments       Enrollment[]
+
+  @@index([email])
+  @@index([username])
+  @@index([isActive])
+  @@map("admins")
+}
+
+/// TABLE 7: admin_sessions
+model AdminSession {
+  id        String   @id
+  adminId   String   @map("admin_id")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+// =============================================================================
+// SECTION 3: COURSES & CONTENT (3 tables)
+// =============================================================================
+
+/// TABLE 8: courses
+model Course {
+  id                    String    @id @default(cuid())
+  courseId              String    @unique @map("course_id") @db.VarChar(50)
+  courseName            String    @map("course_name") @db.VarChar(200)
+  slug                  String    @unique @db.VarChar(200)
+  affiliatedBranch      Branch    @map("affiliated_branch")
+  coursePrice            Decimal   @default(299.00) @map("course_price") @db.Decimal(10, 2)
+  courseThumbnail       String    @map("course_thumbnail")
+  courseDescription     String    @map("course_description")
+  courseTranscriptUrl   String?   @map("course_transcript_url")
+  problemStatementText  String    @map("problem_statement_text")
+  problemStatementPdfUrl String?  @map("problem_statement_pdf_url")
+  tags                  Json      @default("{}")
+  isActive              Boolean   @default(true) @map("is_active")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt             DateTime? @map("deleted_at") @db.Timestamptz()
+
+  // Relations
+  modules           CourseModule[]
+  enrollments       Enrollment[]
+  certificates      Certificate[]
+  analyticsCourses  AnalyticsCourse[]
+  gradingCriteria   GradingCriteria[]
+
+  @@index([slug])
+  @@index([courseId])
+  @@index([affiliatedBranch])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("courses")
+}
+
+/// TABLE 9: course_modules
+model CourseModule {
+  id            String   @id @default(cuid())
+  courseId       String   @map("course_id")
+  dayNumber     Int      @map("day_number")
+  title         String   @db.VarChar(200)
+  contentText   String   @map("content_text")
+  notesPdfUrl   String?  @map("notes_pdf_url")
+  quizQuestions Json     @map("quiz_questions")
+  isFreePreview Boolean  @default(false) @map("is_free_preview")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  videoAssets VideoAsset[]
+
+  @@unique([courseId, dayNumber])
+  @@index([courseId])
+  @@index([isFreePreview])
+  @@map("course_modules")
+}
+
+/// TABLE 10: video_assets
+model VideoAsset {
+  id               String       @id @default(cuid())
+  courseModuleId    String       @map("course_module_id")
+  r2Key            String       @unique @map("r2_key")
+  r2Bucket         String       @default("sprintern-videos") @map("r2_bucket") @db.VarChar(100)
+  cdnUrl           String       @map("cdn_url")
+  fileSizeBytes    BigInt       @map("file_size_bytes")
+  durationSeconds  Int?         @map("duration_seconds")
+  resolution       String?      @db.VarChar(20)
+  uploadStatus     UploadStatus @default(pending) @map("upload_status")
+  processingStatus String?      @map("processing_status") @db.VarChar(20)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  courseModule CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  videoViews  VideoView[]
+
+  @@index([courseModuleId])
+  @@index([uploadStatus])
+  @@map("video_assets")
+}
+
+// =============================================================================
+// SECTION 4: ENROLLMENTS & PROGRESS (3 tables)
+// =============================================================================
+
+/// TABLE 11: enrollments
+/// PRISMA: payment_gateway_order_id used for Idempotency Check in Webhook
+model Enrollment {
+  id                       String        @id @default(cuid())
+  userId                   String        @map("user_id")
+  courseId                  String        @map("course_id")
+  paymentStatus            PaymentStatus @default(pending) @map("payment_status")
+  paymentGatewayOrderId    String?       @unique @map("payment_gateway_order_id") @db.VarChar(100)
+  paymentGatewayPaymentId  String?       @map("payment_gateway_payment_id") @db.VarChar(100)
+  amountPaid               Decimal       @map("amount_paid") @db.Decimal(10, 2)
+  promocodeUsed            String?       @map("promocode_used") @db.VarChar(50)
+  discountAmount           Decimal       @default(0.00) @map("discount_amount") @db.Decimal(10, 2)
+  paymentMetadata          Json?         @map("payment_metadata")
+  currentDay               Int           @default(1) @map("current_day")
+  day7Completed            Boolean       @default(false) @map("day_7_completed")
+  projectSubmissionDeadline DateTime?    @map("project_submission_deadline") @db.Timestamptz()
+  certificateIssued        Boolean       @default(false) @map("certificate_issued")
+  certificateId            String?       @unique @map("certificate_id") @db.VarChar(100)
+  certificateUrl           String?       @map("certificate_url")
+  isAdminGranted           Boolean       @default(false) @map("is_admin_granted")
+  adminGrantedBy           String?       @map("admin_granted_by")
+  adminGrantReason         String?       @map("admin_grant_reason")
+  enrolledAt               DateTime      @default(now()) @map("enrolled_at") @db.Timestamptz()
+  completedAt              DateTime?     @map("completed_at") @db.Timestamptz()
+  updatedAt                DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt                DateTime?     @map("deleted_at") @db.Timestamptz()
+
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  course               Course                @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  adminGranter         Admin?                @relation(fields: [adminGrantedBy], references: [id], onDelete: SetNull)
+  dailyProgress        DailyProgress[]
+  videoViews           VideoView[]
+  submission           Submission?
+  identityVerification IdentityVerification?
+  certificate          Certificate?
+  transactions         Transaction[]
+  promocodeUsages      PromocodeUsage[]
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+  @@index([paymentStatus])
+  @@index([certificateId])
+  @@index([deletedAt])
+  @@index([isAdminGranted])
+  @@map("enrollments")
+}
+
+/// TABLE 12: daily_progress
+/// PRISMA: @@unique([enrollmentId, dayNumber]) enables prisma.dailyProgress.upsert()
+/// PRISMA: Use 'quizAttempts' for Optimistic Locking (Concurrency Control)
+model DailyProgress {
+  id              String    @id @default(cuid())
+  enrollmentId    String    @map("enrollment_id")
+  dayNumber       Int       @map("day_number")
+  isLocked        Boolean   @default(true) @map("is_locked")
+  unlockedAt      DateTime? @map("unlocked_at") @db.Timestamptz()
+  quizAttempted   Boolean   @default(false) @map("quiz_attempted")
+  quizScore       Int       @default(0) @map("quiz_score")
+  quizAnswers     Json?     @map("quiz_answers")
+  quizPassed      Boolean   @default(false) @map("quiz_passed")
+  quizAttempts    Int       @default(0) @map("quiz_attempts")
+  quizCooldownUntil DateTime? @map("quiz_cooldown_until") @db.Timestamptz()
+  startedAt       DateTime? @map("started_at") @db.Timestamptz()
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz()
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, dayNumber])
+  @@index([enrollmentId])
+  @@index([isLocked])
+  @@map("daily_progress")
+}
+
+/// TABLE 13: video_views
+model VideoView {
+  id                   String   @id @default(cuid())
+  userId               String   @map("user_id")
+  videoAssetId         String?  @map("video_asset_id")
+  enrollmentId         String   @map("enrollment_id")
+  watchDurationSeconds Int      @default(0) @map("watch_duration_seconds")
+  completionPercentage Decimal  @default(0.00) @map("completion_percentage") @db.Decimal(5, 2)
+  lastPositionSeconds  Int      @default(0) @map("last_position_seconds")
+  completed            Boolean  @default(false)
+  startedAt            DateTime @default(now()) @map("started_at") @db.Timestamptz()
+  lastWatchedAt        DateTime @default(now()) @map("last_watched_at") @db.Timestamptz()
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  videoAsset VideoAsset? @relation(fields: [videoAssetId], references: [id], onDelete: SetNull)
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoAssetId, enrollmentId])
+  @@index([userId])
+  @@index([videoAssetId])
+  @@index([enrollmentId])
+  @@map("video_views")
+}
+
+// =============================================================================
+// SECTION 5: SUBMISSIONS & VERIFICATION (3 tables)
+// =============================================================================
+
+/// TABLE 14: submissions
+model Submission {
+  id                          String       @id @default(cuid())
+  enrollmentId                String       @unique @map("enrollment_id")
+  userId                      String       @map("user_id")
+  projectFileUrl              String       @map("project_file_url")
+  reportPdfUrl                String       @map("report_pdf_url")
+  reviewStatus                ReviewStatus @default(pending) @map("review_status")
+  assignedAdminId             String?      @map("assigned_admin_id")
+  metric1SimulationAccuracy   Decimal?     @map("metric_1_simulation_accuracy") @db.Decimal(2, 1)
+  metric2LogicMethodology     Decimal?     @map("metric_2_logic_methodology") @db.Decimal(2, 1)
+  metric3IndustrialOutput     Decimal?     @map("metric_3_industrial_output") @db.Decimal(2, 1)
+  metric4SensitivityAnalysis  Decimal?     @map("metric_4_sensitivity_analysis") @db.Decimal(2, 1)
+  metric5Documentation        Decimal?     @map("metric_5_documentation") @db.Decimal(2, 1)
+  finalGrade                  Decimal?     @map("final_grade") @db.Decimal(3, 2)
+  gradeCategory               GradeCategory? @map("grade_category")
+  adminNotes                  String?      @map("admin_notes")
+  resubmissionCount           Int          @default(0) @map("resubmission_count")
+  maxResubmissions            Int          @default(2) @map("max_resubmissions")
+  submittedAt                 DateTime     @default(now()) @map("submitted_at") @db.Timestamptz()
+  reviewStartedAt             DateTime?    @map("review_started_at") @db.Timestamptz()
+  reviewCompletedAt           DateTime?    @map("review_completed_at") @db.Timestamptz()
+
+  enrollment          Enrollment          @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  user                User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assignedAdmin       Admin?              @relation(fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  submissionVersions  SubmissionVersion[]
+  identityVerification IdentityVerification?
+
+  @@index([enrollmentId])
+  @@index([userId])
+  @@index([reviewStatus])
+  @@index([assignedAdminId])
+  @@map("submissions")
+}
+
+/// TABLE 15: submission_versions
+model SubmissionVersion {
+  id             String   @id @default(cuid())
+  submissionId   String   @map("submission_id")
+  versionNumber  Int      @map("version_number")
+  projectFileUrl String   @map("project_file_url")
+  reportPdfUrl   String   @map("report_pdf_url")
+  submittedAt    DateTime @default(now()) @map("submitted_at") @db.Timestamptz()
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, versionNumber])
+  @@index([submissionId])
+  @@map("submission_versions")
+}
+
+/// TABLE 16: identity_verifications
+model IdentityVerification {
+  id                 String             @id @default(cuid())
+  userId             String             @map("user_id")
+  enrollmentId       String             @unique @map("enrollment_id")
+  submissionId       String?            @unique @map("submission_id")
+  fullName           String             @map("full_name") @db.VarChar(200)
+  collegeName        String             @map("college_name") @db.VarChar(300)
+  graduationYear     Int                @map("graduation_year")
+  branch             String             @db.VarChar(50)
+  collegeIdUrl       String             @map("college_id_url")
+  verificationStatus VerificationStatus @default(pending) @map("verification_status")
+  verifiedBy         String?            @map("verified_by")
+  adminNotes         String?            @map("admin_notes")
+  submittedAt        DateTime           @default(now()) @map("submitted_at") @db.Timestamptz()
+  verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz()
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  submission Submission?  @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  verifier   Admin?      @relation("verifiedBy", fields: [verifiedBy], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([enrollmentId])
+  @@index([verificationStatus])
+  @@map("identity_verifications")
+}
+
+// =============================================================================
+// SECTION 6: CERTIFICATES (2 tables)
+// =============================================================================
+
+/// TABLE 17: certificates
+model Certificate {
+  id               String    @id @default(cuid())
+  certificateId    String    @unique @map("certificate_id") @db.VarChar(100)
+  enrollmentId     String    @unique @map("enrollment_id")
+  userId           String    @map("user_id")
+  courseId          String    @map("course_id")
+  studentName      String    @map("student_name") @db.VarChar(200)
+  collegeName      String    @map("college_name") @db.VarChar(300)
+  courseName       String    @map("course_name") @db.VarChar(200)
+  grade            CertGrade
+  certificateUrl   String    @map("certificate_url")
+  qrCodeData       String    @map("qr_code_data")
+  isRevoked        Boolean   @default(false) @map("is_revoked")
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz()
+  revokedBy        String?   @map("revoked_by")
+  revocationReason String?   @map("revocation_reason")
+  issuedAt         DateTime  @default(now()) @map("issued_at") @db.Timestamptz()
+
+  enrollment              Enrollment              @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  user                    User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  course                  Course                  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  revoker                 Admin?                  @relation("revokedBy", fields: [revokedBy], references: [id], onDelete: SetNull)
+  certificateVerifications CertificateVerification[]
+
+  @@index([certificateId])
+  @@index([userId])
+  @@index([courseId])
+  @@index([isRevoked])
+  @@map("certificates")
+}
+
+/// TABLE 18: certificate_verifications (public QR scan log)
+model CertificateVerification {
+  id            String   @id @default(cuid())
+  certificateId String   @map("certificate_id") @db.VarChar(100)
+  scannedAt     DateTime @default(now()) @map("scanned_at") @db.Timestamptz()
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  userAgent     String?  @map("user_agent")
+
+  certificate Certificate @relation(fields: [certificateId], references: [certificateId], onDelete: Restrict)
+
+  @@index([certificateId])
+  @@index([scannedAt])
+  @@map("certificate_verifications")
+}
+
+// =============================================================================
+// SECTION 7: REFERRALS & PAYMENTS (3 tables)
+// =============================================================================
+
+/// TABLE 19: referrals
+/// PRISMA: Named relations "referralsSent" and "referralsReceived" (two FKs to User)
+model Referral {
+  id                  String         @id @default(cuid())
+  referrerId          String         @map("referrer_id")
+  refereeId           String         @map("referee_id")
+  referralCodeUsed    String         @map("referral_code_used") @db.VarChar(30)
+  status              ReferralStatus @default(pending)
+  amount              Decimal        @default(50.00) @db.Decimal(10, 2)
+  registeredAt        DateTime       @default(now()) @map("registered_at") @db.Timestamptz()
+  paymentCompletedAt  DateTime?      @map("payment_completed_at") @db.Timestamptz()
+  withdrawalEligibleAt DateTime?     @map("withdrawal_eligible_at") @db.Timestamptz()
+
+  referrer    User          @relation("referralsSent", fields: [referrerId], references: [id], onDelete: Restrict)
+  referee     User          @relation("referralsReceived", fields: [refereeId], references: [id], onDelete: Restrict)
+  transactions Transaction[]
+
+  @@index([referrerId])
+  @@index([refereeId])
+  @@index([status])
+  @@index([referralCodeUsed])
+  @@index([withdrawalEligibleAt])
+  @@map("referrals")
+}
+
+/// TABLE 20: withdrawal_requests
+model WithdrawalRequest {
+  id              String           @id @default(cuid())
+  userId          String           @map("user_id")
+  amount          Decimal          @db.Decimal(10, 2)
+  upiId           String           @map("upi_id") @db.VarChar(100)
+  status          WithdrawalStatus @default(pending)
+  adminConfirmed  Boolean          @default(false) @map("admin_confirmed")
+  processedBy     String?          @map("processed_by")
+  transactionId   String?          @map("transaction_id") @db.VarChar(100)
+  screenshotUrl   String?          @map("screenshot_url")
+  rejectionReason String?          @map("rejection_reason")
+  requestedAt     DateTime         @default(now()) @map("requested_at") @db.Timestamptz()
+  processedAt     DateTime?        @map("processed_at") @db.Timestamptz()
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  processor   Admin?        @relation(fields: [processedBy], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("withdrawal_requests")
+}
+
+/// TABLE 21: transactions
+model Transaction {
+  id                   String            @id @default(cuid())
+  userId               String            @map("user_id")
+  transactionType      TransactionType   @map("transaction_type")
+  amount               Decimal           @db.Decimal(10, 2)
+  paymentMethod        String?           @map("payment_method") @db.VarChar(50)
+  enrollmentId         String?           @map("enrollment_id")
+  referralId           String?           @map("referral_id")
+  withdrawalRequestId  String?           @map("withdrawal_request_id")
+  gatewayTransactionId String?           @map("gateway_transaction_id") @db.VarChar(100)
+  gatewayStatus        String?           @map("gateway_status") @db.VarChar(50)
+  status               TransactionStatus @default(pending)
+  adminId              String?           @map("admin_id")
+  reason               String?
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  enrollment        Enrollment?        @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  referral          Referral?          @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  withdrawalRequest WithdrawalRequest? @relation(fields: [withdrawalRequestId], references: [id], onDelete: SetNull)
+  admin             Admin?             @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([transactionType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([enrollmentId])
+  @@index([gatewayTransactionId])
+  @@map("transactions")
+}
+
+// =============================================================================
+// SECTION 8: PROMOCODES (2 tables)
+// =============================================================================
+
+/// TABLE 22: promocodes
+model Promocode {
+  id            String       @id @default(cuid())
+  code          String       @unique @db.VarChar(50)
+  description   String?
+  discountType  DiscountType @map("discount_type")
+  discountValue Decimal      @map("discount_value") @db.Decimal(10, 2)
+  maxDiscount   Decimal?     @map("max_discount") @db.Decimal(10, 2)
+  usageLimit    Int?         @map("usage_limit")
+  usageCount    Int          @default(0) @map("usage_count")
+  perUserLimit  Int          @default(1) @map("per_user_limit")
+  validFrom     DateTime     @map("valid_from") @db.Timestamptz()
+  validUntil    DateTime     @map("valid_until") @db.Timestamptz()
+  isActive      Boolean      @default(true) @map("is_active")
+  createdBy     String?      @map("created_by")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt     DateTime?    @map("deleted_at") @db.Timestamptz()
+
+  creator Admin?           @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  usages  PromocodeUsage[]
+
+  @@index([code])
+  @@index([isActive])
+  @@index([validFrom, validUntil])
+  @@map("promocodes")
+}
+
+/// TABLE 23: promocode_usage
+model PromocodeUsage {
+  id              String   @id @default(cuid())
+  promocodeId     String   @map("promocode_id")
+  userId          String   @map("user_id")
+  enrollmentId    String   @map("enrollment_id")
+  discountApplied Decimal  @map("discount_applied") @db.Decimal(10, 2)
+  usedAt          DateTime @default(now()) @map("used_at") @db.Timestamptz()
+
+  promocode  Promocode  @relation(fields: [promocodeId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([promocodeId])
+  @@index([userId, promocodeId])
+  @@map("promocode_usage")
+}
+
+// =============================================================================
+// SECTION 9: ADMIN AUDIT (1 table — IMMUTABLE)
+// =============================================================================
+
+/// TABLE 24: admin_logs
+/// IMPORTANT: admin_id has NO foreign key intentionally.
+/// If admin account deleted, log entries must survive forever.
+/// This is an append-only, immutable audit trail.
+/// DB triggers prevent UPDATE and DELETE (see migration SQL).
+model AdminLog {
+  id         String   @id @default(cuid())
+  adminId    String   @map("admin_id")
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String   @map("entity_id")
+  details    Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  timestamp  DateTime @default(now()) @db.Timestamptz()
+
+  @@index([adminId])
+  @@index([timestamp])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@map("admin_logs")
+}
+
+// =============================================================================
+// SECTION 10: PLATFORM (5 tables)
+// =============================================================================
+
+/// TABLE 25: notifications
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  campaignId String?   @map("campaign_id")
+  type       String    @db.VarChar(50)
+  title      String    @db.VarChar(200)
+  message    String
+  isRead     Boolean   @default(false) @map("is_read")
+  readAt     DateTime? @map("read_at") @db.Timestamptz()
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign NotificationCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@index([campaignId])
+  @@map("notifications")
+}
+
+/// TABLE 26: notification_campaigns
+model NotificationCampaign {
+  id              String         @id @default(cuid())
+  title           String         @db.VarChar(200)
+  message         String
+  ctaText         String?        @map("cta_text") @db.VarChar(100)
+  ctaLink         String?        @map("cta_link")
+  recipientFilter Json           @default("{\"type\": \"all\"}") @map("recipient_filter")
+  deliveryMethod  DeliveryMethod @default(in_app) @map("delivery_method")
+  totalRecipients Int            @default(0) @map("total_recipients")
+  deliveredCount  Int            @default(0) @map("delivered_count")
+  openedCount     Int            @default(0) @map("opened_count")
+  status          CampaignStatus @default(draft)
+  scheduledAt     DateTime?      @map("scheduled_at") @db.Timestamptz()
+  sentAt          DateTime?      @map("sent_at") @db.Timestamptz()
+  createdBy       String         @map("created_by")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+
+  creator       Admin          @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  notifications Notification[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdBy])
+  @@map("notification_campaigns")
+}
+
+/// TABLE 27: email_templates
+model EmailTemplate {
+  id           String   @id @default(cuid())
+  templateKey  String   @unique @map("template_key") @db.VarChar(50)
+  templateName String   @map("template_name") @db.VarChar(100)
+  subject      String   @db.VarChar(500)
+  bodyHtml     String   @map("body_html")
+  bodyText     String?  @map("body_text")
+  variables    Json     @default("[]")
+  isActive     Boolean  @default(true) @map("is_active")
+  updatedBy    String?  @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  updater Admin? @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([templateKey])
+  @@map("email_templates")
+}
+
+/// TABLE 28: system_settings
+model SystemSetting {
+  id           String   @id @default(cuid())
+  settingKey   String   @unique @map("setting_key") @db.VarChar(100)
+  settingValue Json     @map("setting_value")
+  description  String?
+  updatedBy    String?  @map("updated_by")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  updater Admin? @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([settingKey])
+  @@map("system_settings")
+}
+
+/// TABLE 29: webhook_logs
+model WebhookLog {
+  id           String        @id @default(cuid())
+  webhookType  String        @map("webhook_type") @db.VarChar(50)
+  payload      Json
+  status       WebhookStatus
+  errorMessage String?       @map("error_message")
+  processedAt  DateTime      @default(now()) @map("processed_at") @db.Timestamptz()
+
+  @@index([webhookType, status])
+  @@index([processedAt])
+  @@map("webhook_logs")
+}
+
+// =============================================================================
+// SECTION 11: ANALYTICS — PRE-COMPUTED (2 tables)
+// =============================================================================
+
+/// TABLE 30: analytics_daily
+model AnalyticsDaily {
+  id                    String   @id @default(cuid())
+  date                  DateTime @unique @db.Date
+  newUsers              Int      @default(0) @map("new_users")
+  activeUsers           Int      @default(0) @map("active_users")
+  newEnrollments        Int      @default(0) @map("new_enrollments")
+  completedEnrollments  Int      @default(0) @map("completed_enrollments")
+  revenue               Decimal  @default(0.00) @db.Decimal(10, 2)
+  refunds               Decimal  @default(0.00) @db.Decimal(10, 2)
+  netRevenue            Decimal  @default(0.00) @map("net_revenue") @db.Decimal(10, 2)
+  newReferrals          Int      @default(0) @map("new_referrals")
+  referralConversions   Int      @default(0) @map("referral_conversions")
+  referralPayouts       Decimal  @default(0.00) @map("referral_payouts") @db.Decimal(10, 2)
+  videosWatched         Int      @default(0) @map("videos_watched")
+  quizzesAttempted      Int      @default(0) @map("quizzes_attempted")
+  projectsSubmitted     Int      @default(0) @map("projects_submitted")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([date])
+  @@map("analytics_daily")
+}
+
+/// TABLE 31: analytics_courses
+model AnalyticsCourse {
+  id               String   @id @default(cuid())
+  courseId          String   @map("course_id")
+  date             DateTime @db.Date
+  enrollments      Int      @default(0)
+  completions      Int      @default(0)
+  avgCompletionRate Decimal  @default(0.00) @map("avg_completion_rate") @db.Decimal(5, 2)
+  avgQuizScore     Decimal  @default(0.00) @map("avg_quiz_score") @db.Decimal(5, 2)
+  avgProjectGrade  Decimal  @default(0.00) @map("avg_project_grade") @db.Decimal(3, 2)
+  revenue          Decimal  @default(0.00) @db.Decimal(10, 2)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, date])
+  @@index([courseId])
+  @@index([date])
+  @@map("analytics_courses")
+}
+
+// =============================================================================
+// SECTION 12: FUTURE-READY (1 table)
+// =============================================================================
+
+/// TABLE 32: grading_criteria
+/// ACTIVATION: Deploy when >3 branches need different grading or >20 courses exist.
+/// Until then, application uses hardcoded defaults (5 metrics with fixed weights).
+model GradingCriteria {
+  id               String   @id @default(cuid())
+  courseId          String   @map("course_id")
+  metricNumber     Int      @map("metric_number")
+  metricName       String   @map("metric_name") @db.VarChar(100)
+  metricDescription String? @map("metric_description")
+  weightPercentage Decimal  @map("weight_percentage") @db.Decimal(5, 2)
+  displayOrder     Int      @map("display_order")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, metricNumber])
+  @@index([courseId])
+  @@map("grading_criteria")
+}
