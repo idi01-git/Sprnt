@@ -1,11 +1,23 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { AdminRole } from '@/generated/prisma/client'
+import { checkRateLimit, AUTH_RATE_LIMIT, API_RATE_LIMIT, SEARCH_RATE_LIMIT } from '@/lib/rate-limit'
 
 // ============================================================================
 // PROXY FUNCTION (Node.js Runtime)
 // Next.js 16: middleware.ts is deprecated, use proxy.ts instead
 // ============================================================================
+
+/**
+ * Extract client IP from request headers (handles proxies like Vercel/Cloudflare).
+ */
+function getClientIp(request: NextRequest): string {
+    return (
+        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        request.headers.get('x-real-ip') ||
+        '127.0.0.1'
+    )
+}
 
 export async function proxy(request: NextRequest) {
     const path = request.nextUrl.pathname
@@ -26,6 +38,7 @@ export async function proxy(request: NextRequest) {
         publicRoutes.includes(path) ||
         path.startsWith('/_next') ||
         path.startsWith('/api/public') ||
+        path.startsWith('/api/admin/auth/login') ||
         path.match(/\.(ico|png|svg|jpg|jpeg|gif|webp)$/)
 
     if (isPublicRoute) {
@@ -33,25 +46,89 @@ export async function proxy(request: NextRequest) {
     }
 
     // ============================================================================
+    // RATE LIMITING (Applied to all non-static routes)
+    // ============================================================================
+    const clientIp = getClientIp(request)
+
+    // Pick the right config based on the route
+    let rateLimitConfig = API_RATE_LIMIT
+    let rateLimitKey = `api:${clientIp}`
+
+    if (path.startsWith('/api/auth')) {
+        rateLimitConfig = AUTH_RATE_LIMIT
+        rateLimitKey = `auth:${clientIp}`
+    } else if (path.startsWith('/api/courses/search')) {
+        rateLimitConfig = SEARCH_RATE_LIMIT
+        rateLimitKey = `search:${clientIp}`
+    }
+
+    const { limited, remaining, retryAfterMs } = checkRateLimit(rateLimitKey, rateLimitConfig)
+
+    if (limited) {
+        const retryAfterSeconds = Math.ceil(retryAfterMs / 1000)
+        return NextResponse.json(
+            {
+                success: false,
+                data: null,
+                error: {
+                    code: 'RATE_LIMITED',
+                    message: 'Too many requests. Please try again later.',
+                    details: { retryAfter: retryAfterSeconds },
+                },
+            },
+            {
+                status: 429,
+                headers: {
+                    'Retry-After': String(retryAfterSeconds),
+                    'X-RateLimit-Remaining': '0',
+                },
+            },
+        )
+    }
+
+    // ============================================================================
     // ADMIN ROUTES (Require admin authentication)
     // ============================================================================
-    if (path.startsWith('/admin')) {
-        return handleAdminAuth(request)
+    if (path.startsWith('/admin') || path.startsWith('/api/admin/')) {
+        const response = await handleAdminAuth(request)
+        response.headers.set('X-RateLimit-Remaining', String(remaining))
+        return response
     }
 
     // ============================================================================
     // STUDENT ROUTES (Require student authentication)
     // ============================================================================
-    if (
+
+    // Page routes
+    const isProtectedPage =
         path.startsWith('/dashboard') ||
         path.startsWith('/learn') ||
         path.startsWith('/profile') ||
         path.startsWith('/certificate')
-    ) {
-        return handleStudentAuth(request)
+
+    // API routes that require student auth
+    const isProtectedApi =
+        path.startsWith('/api/users') ||
+        path.startsWith('/api/enrollments') ||
+        path.startsWith('/api/learn') ||
+        path.startsWith('/api/quiz') ||
+        path.startsWith('/api/submissions') ||
+        path.startsWith('/api/certificates') ||
+        path.startsWith('/api/enroll') ||
+        path.startsWith('/api/video') ||
+        path.startsWith('/api/wallet') ||
+        path.startsWith('/api/notifications') ||
+        (path.startsWith('/api/referrals') && !path.startsWith('/api/referrals/validate'))
+
+    if (isProtectedPage || isProtectedApi) {
+        const response = await handleStudentAuth(request)
+        response.headers.set('X-RateLimit-Remaining', String(remaining))
+        return response
     }
 
-    return NextResponse.next()
+    const response = NextResponse.next()
+    response.headers.set('X-RateLimit-Remaining', String(remaining))
+    return response
 }
 
 // ============================================================================
@@ -136,12 +213,25 @@ async function handleStudentAuth(request: NextRequest) {
     // Import dynamically to avoid edge runtime issues
     const { prisma } = await import('@/lib/db')
 
+    const path = request.nextUrl.pathname
+    const isApiRoute = path.startsWith('/api/')
+
+    // Helper: return 401 JSON for APIs, redirect for pages
+    function unauthorized401() {
+        if (isApiRoute) {
+            return NextResponse.json(
+                { success: false, data: null, error: { code: 'AUTH_REQUIRED', message: 'Authentication required' } },
+                { status: 401 },
+            )
+        }
+        return NextResponse.redirect(new URL('/login', request.url))
+    }
+
     // Check for student session cookie
     const sessionId = request.cookies.get('sprintern_session')?.value
 
     if (!sessionId) {
-        // No session, redirect to login
-        return NextResponse.redirect(new URL('/login', request.url))
+        return unauthorized401()
     }
 
     // Validate student session
@@ -156,7 +246,7 @@ async function handleStudentAuth(request: NextRequest) {
             await prisma.session.delete({ where: { id: sessionId } })
         }
 
-        const response = NextResponse.redirect(new URL('/login', request.url))
+        const response = unauthorized401()
         response.cookies.delete('sprintern_session')
         return response
     }
@@ -165,7 +255,7 @@ async function handleStudentAuth(request: NextRequest) {
 
     // Check if user account is deleted
     if (user.deletedAt) {
-        return NextResponse.redirect(new URL('/login', request.url))
+        return unauthorized401()
     }
 
     // Attach user info to request headers

@@ -1,11 +1,12 @@
 import { prisma } from '@/lib/db'
-import { requireAuth } from '@/lib/auth/guards'
+import { requireAuth, AuthError } from '@/lib/auth/guards'
 import { generatePresignedUploadUrl, deleteFile, Bucket } from '@/lib/r2'
 import { avatarUploadSchema } from '@/lib/validations/profile'
 import {
     createSuccessResponse,
     createErrorResponse,
     badRequest,
+    unauthorized,
     serverError,
     HttpStatus,
     ErrorCode,
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
             expiresAt: presigned.expiresAt,
         })
     } catch (error) {
-        if ((error as { digest?: string }).digest === 'NEXT_REDIRECT') throw error
+        if (error instanceof AuthError) return unauthorized()
         console.error('[POST /api/users/profile/avatar]', error)
         return serverError('Failed to generate avatar upload URL')
     }
@@ -100,7 +101,7 @@ export async function DELETE() {
 
         return createSuccessResponse({ message: 'Avatar removed successfully' })
     } catch (error) {
-        if ((error as { digest?: string }).digest === 'NEXT_REDIRECT') throw error
+        if (error instanceof AuthError) return unauthorized()
         console.error('[DELETE /api/users/profile/avatar]', error)
         return serverError('Failed to remove avatar')
     }

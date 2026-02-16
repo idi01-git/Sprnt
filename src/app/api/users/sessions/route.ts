@@ -1,8 +1,9 @@
 import { prisma } from '@/lib/db'
-import { requireAuth } from '@/lib/auth/guards'
+import { requireAuth, AuthError } from '@/lib/auth/guards'
 import {
     createSuccessResponse,
     createErrorResponse,
+    unauthorized,
     serverError,
     HttpStatus,
     ErrorCode,
@@ -30,7 +31,7 @@ export async function GET() {
 
         return createSuccessResponse({ sessions })
     } catch (error) {
-        if ((error as { digest?: string }).digest === 'NEXT_REDIRECT') throw error
+        if (error instanceof AuthError) return unauthorized()
         console.error('[GET /api/users/sessions]', error)
         return serverError('Failed to fetch sessions')
     }

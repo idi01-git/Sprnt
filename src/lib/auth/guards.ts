@@ -1,7 +1,15 @@
 import { headers } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import type { User, Admin, AdminRole } from '@/generated/prisma/client'
+
+// Custom error class for authentication failures
+// API routes catch this and return 401 JSON instead of crashing
+export class AuthError extends Error {
+    constructor(message = 'Authentication required') {
+        super(message)
+        this.name = 'AuthError'
+    }
+}
 
 // ============================================================================
 // STUDENT GUARDS
@@ -18,7 +26,7 @@ export async function requireAuth(): Promise<User> {
     const userId = headersList.get('x-user-id')
 
     if (!userId) {
-        redirect('/login')
+        throw new AuthError()
     }
 
     const user = await prisma.user.findUnique({
@@ -26,7 +34,7 @@ export async function requireAuth(): Promise<User> {
     })
 
     if (!user || user.deletedAt) {
-        redirect('/login')
+        throw new AuthError()
     }
 
     return user
@@ -58,7 +66,7 @@ export async function requireAdmin(): Promise<AdminContext> {
     const role = headersList.get('x-admin-role') as AdminRole | null
 
     if (!adminId || !role) {
-        redirect('/admin/login')
+        throw new AuthError('Admin authentication required')
     }
 
     const admin = await prisma.admin.findUnique({
@@ -66,7 +74,7 @@ export async function requireAdmin(): Promise<AdminContext> {
     })
 
     if (!admin || !admin.isActive) {
-        redirect('/admin/login')
+        throw new AuthError('Admin authentication required')
     }
 
     return { adminId, role, admin }

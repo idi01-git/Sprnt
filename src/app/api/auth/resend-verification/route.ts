@@ -67,6 +67,7 @@ export async function POST() {
 
         // 5. Generate new verification token (24-hour expiry)
         const rawToken = randomBytes(32).toString('hex')
+        // console.log('>>> DEBUG: RAW VERIFY TOKEN:', rawToken)
         const tokenHash = createHash('sha256').update(rawToken).digest('hex')
 
         await prisma.authToken.create({

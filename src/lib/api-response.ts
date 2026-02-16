@@ -68,6 +68,15 @@ export const ErrorCode = {
     COURSE_ALREADY_ENROLLED: 'COURSE_ALREADY_ENROLLED',
     COURSE_FETCH_FAILED: 'COURSE_FETCH_FAILED',
 
+    // Enrollment
+    ENROLLMENT_NOT_FOUND: 'ENROLLMENT_NOT_FOUND',
+    ENROLLMENT_ACCESS_DENIED: 'ENROLLMENT_ACCESS_DENIED',
+
+    // Promocode
+    PROMO_INVALID: 'PROMO_INVALID',
+    PROMO_EXPIRED: 'PROMO_EXPIRED',
+    PROMO_USAGE_EXCEEDED: 'PROMO_USAGE_EXCEEDED',
+
     // Quiz
     QUIZ_NOT_FOUND: 'QUIZ_NOT_FOUND',
     QUIZ_ALREADY_SUBMITTED: 'QUIZ_ALREADY_SUBMITTED',
@@ -88,6 +97,22 @@ export const ErrorCode = {
     // Certificate
     CERTIFICATE_NOT_FOUND: 'CERTIFICATE_NOT_FOUND',
     CERTIFICATE_NOT_ELIGIBLE: 'CERTIFICATE_NOT_ELIGIBLE',
+
+    // Wallet & Withdrawals
+    WALLET_INSUFFICIENT_BALANCE: 'WALLET_INSUFFICIENT_BALANCE',
+    WALLET_WITHDRAWAL_PENDING: 'WALLET_WITHDRAWAL_PENDING',
+    WALLET_WITHDRAWAL_MIN_AMOUNT: 'WALLET_WITHDRAWAL_MIN_AMOUNT',
+    WALLET_UPI_REQUIRED: 'WALLET_UPI_REQUIRED',
+
+    // Notifications
+    NOTIFICATION_NOT_FOUND: 'NOTIFICATION_NOT_FOUND',
+    NOTIFICATION_ACCESS_DENIED: 'NOTIFICATION_ACCESS_DENIED',
+
+    // Admin
+    ADMIN_AUTH_REQUIRED: 'ADMIN_AUTH_REQUIRED',
+    ADMIN_ACCOUNT_DISABLED: 'ADMIN_ACCOUNT_DISABLED',
+    ADMIN_INVALID_CREDENTIALS: 'ADMIN_INVALID_CREDENTIALS',
+    ADMIN_FORBIDDEN: 'ADMIN_FORBIDDEN',
 } as const
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -110,6 +135,7 @@ export interface ApiError {
 export interface SuccessResponse<T> {
     readonly success: true
     readonly data: T
+    readonly meta?: PaginationMeta
     readonly error: null
 }
 
@@ -177,8 +203,10 @@ export function isError<T>(response: ApiResponse<T>): response is ErrorResponse 
 // =============================================================================
 
 /** Build a success envelope without wrapping in NextResponse */
-export function successPayload<T>(data: T): SuccessResponse<T> {
-    return { success: true, data, error: null }
+export function successPayload<T>(data: T, meta?: PaginationMeta): SuccessResponse<T> {
+    return meta
+        ? { success: true, data, meta, error: null }
+        : { success: true, data, error: null }
 }
 
 /** Build an error envelope without wrapping in NextResponse */
@@ -238,37 +266,32 @@ export function createErrorResponse(
 
 /**
  * Return a paginated JSON success response.
+ * Per API doc envelope: `{ success, data, meta: { page, total, ... } }`
  *
  * @example
  * ```ts
- * const [items, total] = await Promise.all([
+ * const [courses, total] = await Promise.all([
  *   prisma.course.findMany({ skip, take }),
  *   prisma.course.count(),
  * ])
- * return createPaginatedResponse(items, { total, page, pageSize })
+ * return createPaginatedResponse({ courses }, { total, page, pageSize: limit })
  * ```
  */
 export function createPaginatedResponse<T>(
-    items: T[],
+    data: T,
     pagination: { total: number; page: number; pageSize: number },
     status: HttpStatusCode = HttpStatus.OK,
-): NextResponse<SuccessResponse<PaginatedData<T>>> {
+): NextResponse<SuccessResponse<T>> {
     const totalPages = Math.ceil(pagination.total / pagination.pageSize)
-
-    return createSuccessResponse<PaginatedData<T>>(
-        {
-            items,
-            pagination: {
-                total: pagination.total,
-                page: pagination.page,
-                pageSize: pagination.pageSize,
-                totalPages,
-                hasNext: pagination.page < totalPages,
-                hasPrev: pagination.page > 1,
-            },
-        },
-        status,
-    )
+    const meta: PaginationMeta = {
+        total: pagination.total,
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        totalPages,
+        hasNext: pagination.page < totalPages,
+        hasPrev: pagination.page > 1,
+    }
+    return NextResponse.json(successPayload(data, meta), { status })
 }
 
 // =============================================================================

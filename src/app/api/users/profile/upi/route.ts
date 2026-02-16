@@ -1,10 +1,11 @@
 import { prisma } from '@/lib/db'
-import { requireAuth } from '@/lib/auth/guards'
+import { requireAuth, AuthError } from '@/lib/auth/guards'
 import { updateUpiSchema } from '@/lib/validations/profile'
 import {
     createSuccessResponse,
     createErrorResponse,
     badRequest,
+    unauthorized,
     serverError,
     HttpStatus,
     ErrorCode,
@@ -41,7 +42,7 @@ export async function PUT(request: Request) {
 
         return createSuccessResponse({ upiId: updatedUser.upiId })
     } catch (error) {
-        if ((error as { digest?: string }).digest === 'NEXT_REDIRECT') throw error
+        if (error instanceof AuthError) return unauthorized()
         console.error('[PUT /api/users/profile/upi]', error)
         return serverError('Failed to update UPI ID')
     }

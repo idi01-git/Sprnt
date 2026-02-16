@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
-import { requireAuth } from '@/lib/auth/guards'
+import { requireAuth, AuthError } from '@/lib/auth/guards'
 import { validateRequest, invalidateSession } from '@/lib/auth/session'
 import {
     createSuccessResponse,
     createErrorResponse,
     forbidden,
+    unauthorized,
     serverError,
     HttpStatus,
     ErrorCode,
@@ -55,7 +56,7 @@ export async function DELETE(
 
         return createSuccessResponse({ message: 'Session revoked successfully' })
     } catch (error) {
-        if ((error as { digest?: string }).digest === 'NEXT_REDIRECT') throw error
+        if (error instanceof AuthError) return unauthorized()
         console.error('[DELETE /api/users/sessions]', error)
         return serverError('Failed to revoke session')
     }

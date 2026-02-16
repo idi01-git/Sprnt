@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         if (user) {
             // Generate a secure random token
             const rawToken = randomBytes(32).toString('hex')
+            // console.log('>>> DEBUG: RAW RESET TOKEN:', rawToken)
             const tokenHash = createHash('sha256').update(rawToken).digest('hex')
 
             // Invalidate any prior reset tokens for this user

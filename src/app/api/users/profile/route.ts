@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/db'
-import { requireAuth } from '@/lib/auth/guards'
+import { requireAuth, AuthError } from '@/lib/auth/guards'
 import { updateProfileSchema } from '@/lib/validations/profile'
 import {
     createSuccessResponse,
     createErrorResponse,
+    unauthorized,
     serverError,
     HttpStatus,
     ErrorCode,
@@ -47,7 +48,7 @@ export async function GET() {
 
         return createSuccessResponse({ profile })
     } catch (error) {
-        if ((error as { digest?: string }).digest === 'NEXT_REDIRECT') throw error
+        if (error instanceof AuthError) return unauthorized()
         console.error('[GET /api/users/profile]', error)
         return serverError('Failed to fetch profile')
     }
@@ -114,7 +115,7 @@ export async function PUT(request: Request) {
 
         return createSuccessResponse({ profile: updatedProfile })
     } catch (error) {
-        if ((error as { digest?: string }).digest === 'NEXT_REDIRECT') throw error
+        if (error instanceof AuthError) return unauthorized()
         console.error('[PUT /api/users/profile]', error)
         return serverError('Failed to update profile')
     }
