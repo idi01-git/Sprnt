@@ -394,6 +394,7 @@ model CourseModule {
   title         String   @db.VarChar(200)
   contentText   String   @map("content_text")
   notesPdfUrl   String?  @map("notes_pdf_url")
+  notesR2Key    String?  @map("notes_r2_key")
   quizQuestions Json     @map("quiz_questions")
   isFreePreview Boolean  @default(false) @map("is_free_preview")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()

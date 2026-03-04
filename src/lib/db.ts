@@ -15,10 +15,10 @@ import { PrismaPg } from '@prisma/adapter-pg'
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
 
 function createPrismaClient(): PrismaClient {
-    // Use DIRECT_DATABASE_URL for the adapter (raw postgres:// connection)
-    // Falls back to DATABASE_URL for local development with prisma dev
+    // Runtime queries MUST use the pgBouncer pooled connection (DATABASE_URL)
+    // to prevent serverless connection exhaustion. DIRECT_DATABASE_URL is for CLI only.
     const connectionString =
-        process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL || ''
+        process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL || ''
 
     const adapter = new PrismaPg({ connectionString })
 

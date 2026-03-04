@@ -8,6 +8,7 @@ import {
     HttpStatus,
     ErrorCode,
 } from '@/lib/api-response'
+import { get, set, CACHE_KEYS, CACHE_TTL } from '@/lib/cache'
 import type { Prisma } from '@/generated/prisma/client'
 
 /**
@@ -32,6 +33,18 @@ export async function GET(request: NextRequest) {
 
         const { branch, search, sort, page, limit } = result.data
         const skip = (page - 1) * limit
+
+        // Build cache key based on query params
+        const cacheKey = `${CACHE_KEYS.COURSES_LIST}:${branch || 'all'}:${search || 'none'}:${sort}:${page}:${limit}`
+        
+        // Try to get from cache (only for non-search queries)
+        const cached = !search ? get<{ courses: unknown[]; total: number }>(cacheKey) : null
+        if (cached) {
+            return createPaginatedResponse(
+                { courses: cached.courses },
+                { total: cached.total, page, pageSize: limit }
+            )
+        }
 
         // Build where clause — only active, non-deleted courses
         const where: Prisma.CourseWhereInput = {
@@ -93,6 +106,11 @@ export async function GET(request: NextRequest) {
             }),
             prisma.course.count({ where }),
         ])
+
+        // Cache the result (only for non-search queries)
+        if (!search) {
+            set(cacheKey, { courses, total }, CACHE_TTL.MEDIUM)
+        }
 
         return createPaginatedResponse(
             { courses },

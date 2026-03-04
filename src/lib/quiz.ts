@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { ErrorCode } from '@/lib/api-response'
+import { get, set, CACHE_KEYS, CACHE_TTL } from '@/lib/cache'
 
 // =============================================================================
 // TYPES
@@ -117,6 +118,11 @@ const DEFAULT_CONFIG: QuizConfig = {
  */
 export async function getQuizConfig(): Promise<QuizConfig> {
     try {
+        const cached = get<QuizConfig>(CACHE_KEYS.QUIZ_CONFIG)
+        if (cached) {
+            return cached
+        }
+
         const settings = await prisma.systemSetting.findMany({
             where: {
                 settingKey: {
@@ -136,7 +142,7 @@ export async function getQuizConfig(): Promise<QuizConfig> {
             settings.map((s) => [s.settingKey, s.settingValue]),
         )
 
-        return {
+        const config: QuizConfig = {
             passScore: asNumber(settingsMap.get('quiz_pass_score'), DEFAULT_CONFIG.passScore),
             cooldownMinutes: asNumber(settingsMap.get('quiz_cooldown_minutes'), DEFAULT_CONFIG.cooldownMinutes),
             attemptsBetweenCooldown: asNumber(settingsMap.get('quiz_cooldown_attempts'), DEFAULT_CONFIG.attemptsBetweenCooldown),
@@ -144,6 +150,10 @@ export async function getQuizConfig(): Promise<QuizConfig> {
             submissionDeadlineDays: asNumber(settingsMap.get('quiz_submission_deadline_days'), DEFAULT_CONFIG.submissionDeadlineDays),
             expectedAnswerCount: asNumber(settingsMap.get('quiz_expected_answer_count'), DEFAULT_CONFIG.expectedAnswerCount),
         }
+
+        set(CACHE_KEYS.QUIZ_CONFIG, config, CACHE_TTL.VERY_LONG)
+
+        return config
     } catch (error) {
         console.warn('[Quiz] Failed to load config from DB, using defaults:', error)
         return DEFAULT_CONFIG

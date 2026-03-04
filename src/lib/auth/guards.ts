@@ -167,6 +167,15 @@ export type Permission =
     | 'withdrawals:process'
     | 'analytics:view'
     | 'emails:send'
+    | 'certificates:view'
+    | 'certificates:revoke'
+    | 'certificates:regenerate'
+    | 'referrals:view'
+    | 'withdrawals:view'
+    | 'withdrawals:reject'
+    | 'logs:view'
+    | 'logs:export'
+    | 'admins:manage'
 
 const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     super_admin: [
@@ -186,6 +195,15 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
         'withdrawals:process',
         'analytics:view',
         'emails:send',
+        'certificates:view',
+        'certificates:revoke',
+        'certificates:regenerate',
+        'referrals:view',
+        'withdrawals:view',
+        'withdrawals:reject',
+        'logs:view',
+        'logs:export',
+        'admins:manage',
     ],
     admin: [
         'submissions:view_all',
@@ -201,6 +219,12 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
         'withdrawals:process',
         'analytics:view',
         'emails:send',
+        'certificates:view',
+        'certificates:revoke',
+        'certificates:regenerate',
+        'referrals:view',
+        'withdrawals:view',
+        'withdrawals:reject',
     ],
     reviewer: [
         'submissions:view_assigned',

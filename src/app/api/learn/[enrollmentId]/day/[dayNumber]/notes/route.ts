@@ -8,12 +8,8 @@ import {
     HttpStatus,
     ErrorCode,
 } from '@/lib/api-response'
+import { generatePresignedDownloadUrl, Bucket, Expiry } from '@/lib/r2'
 
-/**
- * GET /api/learn/{enrollmentId}/day/{dayNumber}/notes
- * Return the notes download URL for the specified day.
- * Auth: Session Cookie (owner only, day must be unlocked)
- */
 export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ enrollmentId: string; dayNumber: string }> }
@@ -39,7 +35,6 @@ export async function GET(
             )
         }
 
-        // Verify enrollment
         const enrollment = await prisma.enrollment.findUnique({
             where: { id: enrollmentId },
             select: {
@@ -74,7 +69,6 @@ export async function GET(
             )
         }
 
-        // Check day is unlocked
         if (dayNumber > 1) {
             const progress = await prisma.dailyProgress.findUnique({
                 where: {
@@ -95,7 +89,6 @@ export async function GET(
             }
         }
 
-        // Get notes URL from course module
         const courseModule = await prisma.courseModule.findUnique({
             where: {
                 courseId_dayNumber: {
@@ -103,10 +96,18 @@ export async function GET(
                     dayNumber,
                 },
             },
-            select: { notesPdfUrl: true, title: true },
+            select: { notesPdfUrl: true, notesR2Key: true, title: true },
         })
 
-        if (!courseModule?.notesPdfUrl) {
+        if (!courseModule) {
+            return createErrorResponse(
+                ErrorCode.NOT_FOUND,
+                `Module not found for Day ${dayNumber}`,
+                HttpStatus.NOT_FOUND
+            )
+        }
+
+        if (!courseModule.notesR2Key && !courseModule.notesPdfUrl) {
             return createErrorResponse(
                 ErrorCode.NOT_FOUND,
                 `Notes not available for Day ${dayNumber}`,
@@ -114,10 +115,27 @@ export async function GET(
             )
         }
 
+        if (courseModule.notesR2Key) {
+            const { url, expiresAt } = await generatePresignedDownloadUrl(
+                Bucket.PRIVATE,
+                courseModule.notesR2Key,
+                Expiry.DOWNLOAD
+            )
+
+            return createSuccessResponse({
+                dayNumber,
+                title: courseModule.title,
+                notesUrl: url,
+                expiresAt,
+                isSecure: true,
+            })
+        }
+
         return createSuccessResponse({
             dayNumber,
             title: courseModule.title,
             notesPdfUrl: courseModule.notesPdfUrl,
+            isSecure: false,
         })
     } catch (error) {
         console.error('[GET /api/learn/[enrollmentId]/day/[dayNumber]/notes]', error)

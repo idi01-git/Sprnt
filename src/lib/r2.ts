@@ -89,6 +89,9 @@ export const KeyPrefix = {
     THUMBNAILS: 'course-thumbnails/',
     SUBMISSIONS: 'submissions/',
     IDENTITY_DOCS: 'identity-docs/',
+    TRANSCRIPTS: 'course-transcripts/',
+    PROBLEM_STATEMENTS: 'problem-statements/',
+    NOTES: 'course-notes/',
 } as const
 
 /** Allowed MIME types by category */

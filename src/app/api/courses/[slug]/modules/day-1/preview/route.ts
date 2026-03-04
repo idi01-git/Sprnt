@@ -7,13 +7,8 @@ import {
     HttpStatus,
     ErrorCode,
 } from '@/lib/api-response'
+import { generatePresignedDownloadUrl, Bucket, Expiry } from '@/lib/r2'
 
-/**
- * GET /api/courses/{slug}/modules/day-1/preview
- * Get Day 1 full content: video CDN URL (unsigned, preview quality),
- * content text, notes PDF link. Free for all visitors.
- * Public endpoint — no auth required.
- */
 export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
@@ -21,7 +16,6 @@ export async function GET(
     try {
         const { slug } = await params
 
-        // findFirst — slug is unique but we also filter by isActive/deletedAt
         const course = await prisma.course.findFirst({
             where: { slug, isActive: true, deletedAt: null },
             select: { id: true },
@@ -35,7 +29,6 @@ export async function GET(
             )
         }
 
-        // Get Day 1 module with its assets
         const day1Module = await prisma.courseModule.findUnique({
             where: {
                 courseId_dayNumber: {
@@ -49,12 +42,12 @@ export async function GET(
                 title: true,
                 contentText: true,
                 notesPdfUrl: true,
+                notesR2Key: true,
                 isFreePreview: true,
                 videoAssets: {
                     where: { uploadStatus: 'completed' },
                     select: {
                         id: true,
-                        cdnUrl: true,
                         durationSeconds: true,
                         resolution: true,
                     },
@@ -71,15 +64,39 @@ export async function GET(
             )
         }
 
+        let notesUrl: string | null = null
+        let notesExpiresAt: Date | null = null
+        let hasNotes = false
+
+        if (day1Module.notesR2Key) {
+            hasNotes = true
+            const signedUrl = await generatePresignedDownloadUrl(
+                Bucket.PRIVATE,
+                day1Module.notesR2Key,
+                Expiry.DOWNLOAD
+            )
+            notesUrl = signedUrl.url
+            notesExpiresAt = signedUrl.expiresAt
+        } else if (day1Module.notesPdfUrl) {
+            hasNotes = true
+            notesUrl = day1Module.notesPdfUrl
+        }
+
         return createSuccessResponse({
             module: {
                 id: day1Module.id,
                 dayNumber: day1Module.dayNumber,
                 title: day1Module.title,
                 contentText: day1Module.contentText,
-                notesPdfUrl: day1Module.notesPdfUrl,
                 isFreePreview: day1Module.isFreePreview,
                 video: day1Module.videoAssets[0] ?? null,
+                notes: hasNotes
+                    ? {
+                          url: notesUrl,
+                          expiresAt: notesExpiresAt,
+                          isSecure: !!day1Module.notesR2Key,
+                      }
+                    : null,
             },
         })
     } catch (error) {

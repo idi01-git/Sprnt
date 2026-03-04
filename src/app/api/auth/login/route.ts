@@ -33,7 +33,31 @@ export async function POST(request: Request) {
 
         const { email, password } = result.data
 
-        // 2. Find user by email (include password hash for verification)
+        // 2. First check if user exists at all (for better error messages)
+        const existingUser = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, deletedAt: true },
+        })
+
+        // Check if user is suspended (soft-deleted)
+        if (existingUser && existingUser.deletedAt) {
+            return createErrorResponse(
+                ErrorCode.AUTH_ACCOUNT_DISABLED,
+                'Your account has been suspended. Please contact support.',
+                HttpStatus.UNAUTHORIZED
+            )
+        }
+
+        // Check if user doesn't exist or has no password
+        if (!existingUser || !existingUser.id) {
+            return createErrorResponse(
+                ErrorCode.AUTH_INVALID_CREDENTIALS,
+                'Invalid email or password',
+                HttpStatus.UNAUTHORIZED
+            )
+        }
+
+        // 3. Get full user data for login
         const user = await prisma.user.findUnique({
             where: { email, deletedAt: null },
             select: {
@@ -47,7 +71,7 @@ export async function POST(request: Request) {
             },
         })
 
-        // Generic error to prevent user enumeration
+        // Generic error for invalid password (prevents enumeration)
         if (!user || !user.hashedPassword) {
             return createErrorResponse(
                 ErrorCode.AUTH_INVALID_CREDENTIALS,
