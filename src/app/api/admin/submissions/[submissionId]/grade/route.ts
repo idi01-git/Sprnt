@@ -24,7 +24,20 @@ export async function PUT(
         if (!submission) return notFound('Submission')
 
         const { metric1, metric2, metric3, metric4, metric5, adminNotes } = parsed.data
-        const finalGrade = (metric1 + metric2 + metric3 + metric4 + metric5) / 5
+
+        // Weighted grading as per PRD:
+        // - Simulation Accuracy: 25%
+        // - Logic & Methodology: 25%
+        // - Industrial Output: 20%
+        // - Sensitivity Analysis: 15%
+        // - Documentation: 15%
+        const finalGrade = (
+            metric1 * 0.25 +
+            metric2 * 0.25 +
+            metric3 * 0.20 +
+            metric4 * 0.15 +
+            metric5 * 0.15
+        )
 
         let gradeCategory: 'Distinction' | 'First_Class' | 'Pass' | 'Fail'
         if (finalGrade >= 4.5) gradeCategory = 'Distinction'

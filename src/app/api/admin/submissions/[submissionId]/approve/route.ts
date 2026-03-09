@@ -102,7 +102,11 @@ export async function POST(
         return createSuccessResponse(certificate)
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(
+                ErrorCode.ADMIN_AUTH_REQUIRED,
+                'Admin authentication required',
+                HttpStatus.UNAUTHORIZED
+            )
         }
         console.error('[POST /api/admin/submissions/[submissionId]/approve]', error)
         return serverError()

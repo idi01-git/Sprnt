@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
             })
         }
 
-        // Update enrollment to success + create Day 1 progress + record transaction
+        // Update enrollment to success + create all 7 days progress + record transaction
         await prisma.$transaction(async (tx) => {
             // Mark enrollment as successful
             await tx.enrollment.update({
@@ -103,14 +103,16 @@ export async function POST(request: NextRequest) {
                 },
             })
 
-            // Initialize Day 1 progress (unlocked)
-            await tx.dailyProgress.create({
-                data: {
-                    enrollmentId: enrollment.id,
-                    dayNumber: 1,
-                    isLocked: false,
-                    unlockedAt: new Date(),
-                },
+            // Initialize all 7 days progress (Day 1 unlocked, Days 2-7 locked)
+            const records = Array.from({ length: 7 }, (_, i) => ({
+                enrollmentId: enrollment.id,
+                dayNumber: i + 1,
+                isLocked: i !== 0, // Day 1 is unlocked, rest are locked
+                unlockedAt: i === 0 ? new Date() : null,
+            }))
+            await tx.dailyProgress.createMany({
+                data: records,
+                skipDuplicates: true,
             })
 
             // Record the transaction

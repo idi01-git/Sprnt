@@ -500,17 +500,112 @@ export async function processPaymentWebhook(
         )
     }
 
-    // ─── Step 3: Mark as paid ────────────────────────────────────────────
-    await prisma.enrollment.update({
-        where: { id: enrollment.id },
-        data: {
-            paymentStatus: 'success',
-            paymentGatewayPaymentId: paymentId,
-            paymentMetadata: (metadata ?? {
-                processedAt: new Date().toISOString(),
-                gateway: 'razorpay',
-            }) as unknown as Prisma.InputJsonValue,
-        },
+    // ─── Step 3: Mark as paid and initialize enrollment ───────────────────────
+    await prisma.$transaction(async (tx) => {
+        // Mark enrollment as successful
+        await tx.enrollment.update({
+            where: { id: enrollment.id },
+            data: {
+                paymentStatus: 'success',
+                paymentGatewayPaymentId: paymentId,
+                paymentMetadata: (metadata ?? {
+                    processedAt: new Date().toISOString(),
+                    gateway: 'razorpay',
+                }) as unknown as Prisma.InputJsonValue,
+            },
+        })
+
+        // Initialize all 7 days progress (Day 1 unlocked, Days 2-7 locked)
+        const records = Array.from({ length: 7 }, (_, i) => ({
+            enrollmentId: enrollment.id,
+            dayNumber: i + 1,
+            isLocked: i !== 0, // Day 1 is unlocked, rest are locked
+            unlockedAt: i === 0 ? new Date() : null,
+        }))
+        await tx.dailyProgress.createMany({
+            data: records,
+            skipDuplicates: true,
+        })
+
+        // Record the transaction
+        await tx.transaction.create({
+            data: {
+                userId: enrollment.userId,
+                transactionType: 'course_purchase',
+                amount: enrollment.amountPaid,
+                paymentMethod: 'razorpay',
+                enrollmentId: enrollment.id,
+                gatewayTransactionId: paymentId,
+                gatewayStatus: 'captured',
+                status: 'completed',
+            },
+        })
+
+        // Record promocode usage if applicable
+        if (enrollment.promocodeUsed) {
+            const promo = await tx.promocode.findUnique({
+                where: { code: enrollment.promocodeUsed },
+                select: { id: true },
+            })
+
+            if (promo) {
+                await tx.promocodeUsage.create({
+                    data: {
+                        promocodeId: promo.id,
+                        userId: enrollment.userId,
+                        enrollmentId: enrollment.id,
+                        discountApplied: enrollment.discountAmount,
+                    },
+                })
+
+                // Increment global usage count
+                await tx.promocode.update({
+                    where: { id: promo.id },
+                    data: { usageCount: { increment: 1 } },
+                })
+            }
+        }
+
+        // Handle referral: credit referrer if applicable
+        const user = await tx.user.findUnique({
+            where: { id: enrollment.userId },
+            select: { referredBy: true },
+        })
+
+        if (user?.referredBy) {
+            // Credit referrer's wallet
+            const referralCreditAmount = 50 // Default ₹50 per PRD
+            await tx.user.update({
+                where: { id: user.referredBy },
+                data: { walletBalance: { increment: referralCreditAmount } },
+            })
+
+            // Set 7-day lock period before withdrawal is eligible (per PRD)
+            const withdrawalEligibleAt = new Date()
+            withdrawalEligibleAt.setDate(withdrawalEligibleAt.getDate() + 7)
+
+            // Create referral record
+            await tx.referral.create({
+                data: {
+                    referrerId: user.referredBy,
+                    refereeId: enrollment.userId,
+                    referralCodeUsed: '', // Would need to look up
+                    status: 'pending',
+                    amount: referralCreditAmount,
+                    withdrawalEligibleAt: withdrawalEligibleAt,
+                },
+            })
+
+            // Create transaction for referrer
+            await tx.transaction.create({
+                data: {
+                    userId: user.referredBy,
+                    transactionType: 'referral_credit',
+                    amount: referralCreditAmount,
+                    enrollmentId: enrollment.id,
+                },
+            })
+        }
     })
 
     console.info('[Payments] Payment processed successfully:', {

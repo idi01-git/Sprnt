@@ -130,12 +130,11 @@ export default function AdminSubmissionsPage() {
             {submissions.map((submission) => (
               <div key={submission.id} className="p-6 flex items-center justify-between hover:bg-gray-50">
                 <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                    submission.status === 'pending' ? 'bg-yellow-100 text-yellow-600' :
-                    submission.status === 'approved' ? 'bg-green-100 text-green-600' :
-                    submission.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                    'bg-blue-100 text-blue-600'
-                  }`}>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${submission.status === 'pending' ? 'bg-yellow-100 text-yellow-600' :
+                      submission.status === 'approved' ? 'bg-green-100 text-green-600' :
+                        submission.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                          'bg-blue-100 text-blue-600'
+                    }`}>
                     <FileCheck className="w-6 h-6" />
                   </div>
                   <div>
@@ -145,12 +144,11 @@ export default function AdminSubmissionsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    submission.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                    submission.status === 'approved' ? 'bg-green-100 text-green-700' :
-                    submission.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                    'bg-blue-100 text-blue-700'
-                  }`} style={poppins}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${submission.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                      submission.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        submission.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-blue-100 text-blue-700'
+                    }`} style={poppins}>
                     {submission.status.replace('_', ' ')}
                   </span>
                   <div className="flex items-center gap-2">
@@ -172,12 +170,12 @@ export default function AdminSubmissionsPage() {
                         </button>
                       </>
                     )}
-                    <button
-                      onClick={() => setSelectedSubmission(submission)}
-                      className="p-2 hover:bg-gray-100 rounded-lg"
+                    <Link
+                      href={`/admin/submissions/${submission.id}`}
+                      className="p-2 hover:bg-gray-100 rounded-lg inline-flex items-center"
                     >
                       <Eye className="w-4 h-4 text-gray-600" />
-                    </button>
+                    </Link>
                   </div>
                 </div>
               </div>

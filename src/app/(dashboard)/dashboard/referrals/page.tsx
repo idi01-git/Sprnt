@@ -12,7 +12,10 @@ import {
   AlertCircle,
   ArrowLeft,
   TrendingUp,
-  Share2
+  Share2,
+  MessageCircle,
+  Lock,
+  BookOpen,
 } from 'lucide-react';
 import { getReferralStats, getReferrals, getReferralCode, ReferralStats, Referral, fetchApi } from '@/lib/api';
 
@@ -27,6 +30,7 @@ export default function ReferralsPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -51,15 +55,20 @@ export default function ReferralsPage() {
         }
 
         if (codeRes.success && codeRes.data) {
-          setCode(codeRes.data.code);
+          const refCode = codeRes.data.code;
+          setCode(refCode);
           const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-          setShareUrl(`${baseUrl}?ref=${codeRes.data.code}`);
+          const url = `${baseUrl}?ref=${refCode}`;
+          setShareUrl(url);
+          setShareMessage(
+            `🎓 I'm learning industry skills at Sprintern! Use my referral code ${refCode} and get ₹50 off.\n\nEnroll here: ${url}`
+          );
         }
-        
+
         if (statsRes.success && statsRes.data) {
           setStats(statsRes.data.stats);
         }
-        
+
         if (listRes.success && listRes.data) {
           setReferrals(listRes.data.referrals);
         }
@@ -103,9 +112,65 @@ export default function ReferralsPage() {
   const statCards = [
     { icon: Users, label: 'Total Referred', value: stats?.totalReferred ?? 0, color: 'from-blue-500 to-cyan-500' },
     { icon: Check, label: 'Completed', value: stats?.completedReferrals ?? 0, color: 'from-green-500 to-emerald-500' },
-    { icon: TrendingUp, label: 'Earnings', value: `₹${stats?.totalEarnings ?? 0}`, color: 'from-purple-500 to-pink-500' },
+    { icon: TrendingUp, label: 'Total Earned', value: `₹${stats?.totalEarnings ?? 0}`, color: 'from-purple-500 to-pink-500' },
     { icon: Wallet, label: 'Conversion Rate', value: `${stats && stats.totalReferred > 0 ? Math.round((stats.completedReferrals / stats.totalReferred) * 100) : 0}%`, color: 'from-orange-500 to-red-500' },
   ];
+
+  // Before first purchase — no referral code yet
+  if (!code) {
+    return (
+      <div className="min-h-screen pt-24 pb-16 px-6">
+        <div className="max-w-3xl mx-auto">
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-gray-500 hover:text-purple-600 text-sm mb-6" style={{ ...poppins, fontWeight: 500 }}>
+            <ArrowLeft className="w-4 h-4" /> My Learning
+          </Link>
+
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2" style={{ ...outfit, fontWeight: 800 }}>
+            Referral Program
+          </h1>
+          <p className="text-gray-500 mb-10" style={{ ...poppins, fontSize: '15px' }}>
+            Earn ₹50 for every friend who enrolls using your referral code!
+          </p>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-purple-600 to-blue-600" />
+            <div className="p-10 flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-2xl bg-purple-50 flex items-center justify-center mb-5">
+                <Lock className="w-8 h-8 text-purple-400" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2" style={{ ...outfit, fontWeight: 800 }}>
+                Purchase a Course to Unlock
+              </h2>
+              <p className="text-gray-500 text-sm max-w-xs mb-6" style={poppins}>
+                Your unique referral code is generated after your first course purchase. Start earning ₹50 per referral!
+              </p>
+              <div className="grid grid-cols-3 gap-4 w-full max-w-xs mb-8 text-center">
+                <div className="bg-purple-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-purple-700" style={{ ...outfit, fontWeight: 800 }}>₹50</p>
+                  <p className="text-xs text-purple-600" style={poppins}>per referral</p>
+                </div>
+                <div className="bg-blue-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-blue-700" style={{ ...outfit, fontWeight: 800 }}>₹100</p>
+                  <p className="text-xs text-blue-600" style={poppins}>min withdrawal</p>
+                </div>
+                <div className="bg-green-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-green-700" style={{ ...outfit, fontWeight: 800 }}>∞</p>
+                  <p className="text-xs text-green-600" style={poppins}>no limit</p>
+                </div>
+              </div>
+              <Link
+                href="/courses"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm hover:shadow-lg transition-all hover:scale-105 active:scale-95"
+                style={{ ...poppins, fontWeight: 600 }}
+              >
+                <BookOpen className="w-4 h-4" /> Browse Courses
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-6">
@@ -121,33 +186,46 @@ export default function ReferralsPage() {
           Earn ₹50 for every friend who enrolls using your referral code!
         </p>
 
-        {code && (
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-6 md:p-8 text-white mb-8">
-            <p className="text-white/70 text-sm mb-2" style={{ ...poppins, fontWeight: 500 }}>Your Referral Code</p>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl md:text-4xl tracking-widest" style={{ ...outfit, fontWeight: 800 }}>
-                  {code}
-                </span>
-                <button
-                  onClick={() => handleCopy(code)}
-                  className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
-                >
-                  {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                </button>
-              </div>
+        {/* Referral Code Card */}
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-6 md:p-8 text-white mb-8">
+          <p className="text-white/70 text-sm mb-2" style={{ ...poppins, fontWeight: 500 }}>Your Referral Code</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl md:text-4xl tracking-widest" style={{ ...outfit, fontWeight: 800 }}>
+                {code}
+              </span>
               <button
-                onClick={() => handleCopy(shareUrl)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-purple-700 text-sm hover:shadow-lg transition-all"
-                style={{ ...poppins, fontWeight: 600 }}
+                onClick={() => handleCopy(code)}
+                className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
               >
-                <Share2 className="w-4 h-4" /> Copy Share Link
+                {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
               </button>
             </div>
-            <p className="text-white/60 text-xs mt-3" style={poppins}>{shareUrl}</p>
           </div>
-        )}
 
+          {/* Share Buttons */}
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => handleCopy(shareUrl)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-purple-700 text-sm hover:shadow-lg transition-all"
+              style={{ ...poppins, fontWeight: 600 }}
+            >
+              <Share2 className="w-4 h-4" /> Copy Link
+            </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(shareMessage)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-500 text-white text-sm hover:bg-green-400 hover:shadow-lg transition-all"
+              style={{ ...poppins, fontWeight: 600 }}
+            >
+              <MessageCircle className="w-4 h-4" /> Share on WhatsApp
+            </a>
+          </div>
+          <p className="text-white/50 text-xs mt-3" style={poppins}>{shareUrl}</p>
+        </div>
+
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {statCards.map((card, i) => {
             const Icon = card.icon;
@@ -163,6 +241,26 @@ export default function ReferralsPage() {
           })}
         </div>
 
+        {/* How it works */}
+        <div className="bg-purple-50 rounded-2xl p-6 mb-8">
+          <h3 className="text-sm font-bold text-purple-900 mb-3" style={{ ...outfit, fontWeight: 700 }}>How it works</h3>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {[
+              { step: '1', text: 'Share your unique referral code with friends' },
+              { step: '2', text: 'Friend enrolls using your code and pays' },
+              { step: '3', text: 'You earn ₹50 automatically in your wallet' },
+            ].map((item) => (
+              <div key={item.step} className="flex items-start gap-3">
+                <div className="w-7 h-7 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5" style={poppins}>
+                  {item.step}
+                </div>
+                <p className="text-sm text-purple-800" style={poppins}>{item.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Referral History */}
         <h2 className="text-lg font-bold text-gray-900 mb-4" style={{ ...outfit, fontWeight: 700 }}>
           Referral History
         </h2>

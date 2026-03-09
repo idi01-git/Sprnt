@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'crypto'
 import { prisma } from '@/lib/db'
 import { validateRequest } from '@/lib/auth/session'
+import { sendVerificationEmail } from '@/lib/email'
 import {
     createSuccessResponse,
     createErrorResponse,
@@ -12,7 +13,7 @@ import {
 
 /**
  * POST /api/auth/resend-verification
- * Generate new email verification token and send email
+ * Generate new email verification token and send email via Resend
  */
 export async function POST() {
     try {
@@ -23,7 +24,7 @@ export async function POST() {
         // 2. Check if already verified
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { emailVerified: true, email: true },
+            select: { emailVerified: true, email: true, name: true },
         })
 
         if (!dbUser) return unauthorized('User not found')
@@ -67,7 +68,6 @@ export async function POST() {
 
         // 5. Generate new verification token (24-hour expiry)
         const rawToken = randomBytes(32).toString('hex')
-        // console.log('>>> DEBUG: RAW VERIFY TOKEN:', rawToken)
         const tokenHash = createHash('sha256').update(rawToken).digest('hex')
 
         await prisma.authToken.create({
@@ -79,9 +79,10 @@ export async function POST() {
             },
         })
 
-        // TODO: Send verification email with rawToken link
-        // await sendVerificationEmail(dbUser.email, rawToken)
-        console.info(`[resend-verification] Token generated for ${dbUser.email}`)
+        // 6. Send verification email (fire-and-forget)
+        sendVerificationEmail(dbUser.email, dbUser.name, rawToken).catch((err) =>
+            console.error('[resend-verification] Failed to send verification email:', err)
+        )
 
         return createSuccessResponse({
             message: 'Verification email sent. Please check your inbox.',

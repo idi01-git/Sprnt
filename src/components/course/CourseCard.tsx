@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Clock, Users, Star, CheckCircle2, Sparkles, Award } from 'lucide-react';
 import type { Course } from '@/lib/api';
 
@@ -32,6 +33,7 @@ const formatPrice = (price: number): string => {
 
 export function CourseCard({ course, index = 0, popular = false }: CourseCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const router = useRouter();
   const gradient = getBranchGradient(course.affiliatedBranch);
   const tags = Array.isArray(course.tags) ? course.tags : [];
   const features = tags.slice(0, 4);
@@ -305,6 +307,21 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
 
             {/* Enhanced 3D CTA Button */}
             <button
+              onClick={async (e) => {
+                e.preventDefault(); // stop the parent Link from firing
+                e.stopPropagation();
+                try {
+                  const res = await fetch('/api/auth/session', { credentials: 'include' });
+                  const data = await res.json().catch(() => null);
+                  if (data?.success && data?.data?.user) {
+                    router.push(`/courses/${course.slug}`);
+                  } else {
+                    router.push('/register');
+                  }
+                } catch {
+                  router.push('/register');
+                }
+              }}
               className={`relative w-full py-4 rounded-xl overflow-hidden group/btn transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl`}
             >
               {/* 3D Shadow */}

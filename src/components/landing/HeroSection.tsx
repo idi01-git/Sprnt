@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Sparkles, TrendingUp, Award, Users, ArrowRight } from 'lucide-react';
 import { BackgroundEffect } from './BackgroundEffect';
 import { FloatingParticles } from './FloatingParticles';
@@ -81,8 +82,9 @@ const HeroSection = () => {
               className="flex flex-wrap gap-4 mb-10 animate-fade-in animation-delay-600"
             >
               <button
+                onClick={() => document.getElementById('courses')?.scrollIntoView({ behavior: 'smooth' })}
                 className="relative px-8 py-4 rounded-xl overflow-hidden group shadow-lg shadow-purple-500/30 transition-all duration-200 hover:scale-105 hover:-translate-y-0.5 active:scale-95"
-                style={{ 
+                style={{
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 600,
                   fontSize: '16px'
@@ -95,6 +97,7 @@ const HeroSection = () => {
                   <TrendingUp className="w-5 h-5" />
                 </span>
               </button>
+
 
               <button
                 className="px-8 py-4 rounded-xl border-2 border-purple-200 bg-white hover:bg-purple-50 transition-all shadow-sm hover:scale-105 hover:-translate-y-0.5 active:scale-95"

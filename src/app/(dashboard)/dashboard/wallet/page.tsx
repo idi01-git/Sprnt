@@ -88,7 +88,7 @@ export default function WalletPage() {
       setWithdrawMsg('Withdrawal request submitted! You\'ll receive the amount within 48 hours.');
       setUpiId('');
       setWithdrawAmount('');
-      
+
       const walletRes = await getWalletBalance();
       if (walletRes.success && walletRes.data) {
         setBalance(walletRes.data.wallet);
@@ -146,65 +146,99 @@ export default function WalletPage() {
           </div>
         </div>
 
+        {/* Pending Withdrawal Status Banner */}
+        {balance?.hasPendingWithdrawal && balance.pendingWithdrawal && (
+          <div className="mb-8 bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <CreditCard className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-800 mb-0.5" style={{ ...poppins, fontWeight: 700 }}>
+                Withdrawal Request Pending
+              </p>
+              <p className="text-sm text-amber-700" style={poppins}>
+                ₹{balance.pendingWithdrawal.amount.toFixed(2)} — requested on{' '}
+                {new Date(balance.pendingWithdrawal.requestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+              <p className="text-xs text-amber-600 mt-1" style={poppins}>
+                Processing time: 24–48 hours. You'll receive a notification once it's completed.
+              </p>
+            </div>
+            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-200 text-amber-800 font-semibold flex-shrink-0" style={poppins}>
+              Processing
+            </span>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-8">
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2" style={{ ...outfit, fontWeight: 700 }}>
               <ArrowUpRight className="w-5 h-5 text-purple-600" /> Withdraw Funds
             </h2>
 
-            <form onSubmit={handleWithdraw} className="space-y-5">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1.5" style={{ ...poppins, fontWeight: 600 }}>
-                  UPI ID
-                </label>
-                <input
-                  type="text"
-                  value={upiId}
-                  onChange={e => setUpiId(e.target.value)}
-                  required
-                  placeholder="yourname@upi"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
-                  style={poppins}
-                />
+            {balance?.hasPendingWithdrawal ? (
+              <div className="text-center py-8">
+                <CheckCircle2 className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+                <p className="text-sm text-gray-600" style={poppins}>
+                  A withdrawal request is already in progress. You can submit a new one once this is processed.
+                </p>
               </div>
+            ) : (
+              <form onSubmit={handleWithdraw} className="space-y-5">
 
-              <div>
-                <label className="block text-sm text-gray-700 mb-1.5" style={{ ...poppins, fontWeight: 600 }}>
-                  Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  value={withdrawAmount}
-                  onChange={e => setWithdrawAmount(e.target.value)}
-                  required
-                  min="100"
-                  max={balance?.availableBalance ?? undefined}
-                  placeholder="Min ₹100"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
-                  style={poppins}
-                />
-              </div>
-
-              {withdrawMsg && (
-                <div className={`px-4 py-3 rounded-xl text-sm ${withdrawMsg.startsWith('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'
-                  }`} style={poppins}>
-                  {withdrawMsg}
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5" style={{ ...poppins, fontWeight: 600 }}>
+                    UPI ID
+                  </label>
+                  <input
+                    type="text"
+                    value={upiId}
+                    onChange={e => setUpiId(e.target.value)}
+                    required
+                    placeholder="yourname@upi"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                    style={poppins}
+                  />
                 </div>
-              )}
 
-              <button
-                type="submit"
-                disabled={withdrawing || (balance?.availableBalance ?? 0) < 100}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
-                style={{ ...poppins, fontWeight: 600 }}
-              >
-                {withdrawing ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</>
-                ) : (
-                  <><CreditCard className="w-4 h-4" /> Withdraw to UPI</>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5" style={{ ...poppins, fontWeight: 600 }}>
+                    Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    value={withdrawAmount}
+                    onChange={e => setWithdrawAmount(e.target.value)}
+                    required
+                    min="100"
+                    max={balance?.availableBalance ?? undefined}
+                    placeholder="Min ₹100"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                    style={poppins}
+                  />
+                </div>
+
+                {withdrawMsg && (
+                  <div className={`px-4 py-3 rounded-xl text-sm ${withdrawMsg.startsWith('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'
+                    }`} style={poppins}>
+                    {withdrawMsg}
+                  </div>
                 )}
-              </button>
-            </form>
+
+                <button
+                  type="submit"
+                  disabled={withdrawing || (balance?.availableBalance ?? 0) < 100}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ ...poppins, fontWeight: 600 }}
+                >
+                  {withdrawing ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</>
+                  ) : (
+                    <><CreditCard className="w-4 h-4" /> Withdraw to UPI</>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
 
           <div className="space-y-6">

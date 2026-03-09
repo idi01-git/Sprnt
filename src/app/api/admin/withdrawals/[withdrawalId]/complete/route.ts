@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, badRequest, conflict, notFound, serverError, HttpStatus } from '@/lib/api-response'
+import { createSuccessResponse, createErrorResponse, badRequest, conflict, notFound, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
 import { adminCompleteWithdrawalSchema } from '@/lib/validations/admin'
 import { logAdminAction } from '@/lib/admin-logger'
 
@@ -27,20 +27,18 @@ export async function POST(
             return conflict('Can only complete withdrawals in processing state')
         }
 
+        // Note: Balance was already deducted when user created the withdrawal request
+        // So we only need to mark it as completed here
         await prisma.$transaction([
             prisma.withdrawalRequest.update({
                 where: { id: withdrawalId },
-                data: { status: 'completed', adminConfirmed: true, transactionId: parsed.data.transactionId },
-            }),
-            prisma.user.update({
-                where: { id: withdrawal.userId },
-                data: { walletBalance: { decrement: withdrawal.amount } },
+                data: { status: 'completed', adminConfirmed: true, transactionId: parsed.data.transactionId, processedAt: new Date() },
             }),
             prisma.transaction.create({
                 data: {
                     userId: withdrawal.userId,
                     transactionType: 'withdrawal',
-                    amount: Number(`-${withdrawal.amount}`),
+                    amount: Number(withdrawal.amount) * -1, // Negative for debit
                     status: 'completed',
                     withdrawalRequestId: withdrawalId,
                     adminId,
@@ -50,7 +48,7 @@ export async function POST(
                 data: {
                     userId: withdrawal.userId,
                     type: 'withdrawal_completed',
-                    title: 'Withdrawal Completed ✅',
+                    title: 'Withdrawal Completed',
                     message: `Your withdrawal of ₹${withdrawal.amount} has been processed. Transaction ID: ${parsed.data.transactionId}`,
                 },
             }),
@@ -61,7 +59,11 @@ export async function POST(
         return createSuccessResponse({ message: 'Withdrawal completed successfully' })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(
+                ErrorCode.ADMIN_AUTH_REQUIRED,
+                'Admin authentication required',
+                HttpStatus.UNAUTHORIZED
+            )
         }
         console.error('[POST /api/admin/withdrawals/[withdrawalId]/complete]', error)
         return serverError()

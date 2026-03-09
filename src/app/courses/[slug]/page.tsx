@@ -4,15 +4,16 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { getCourseBySlug } from '@/lib/api';
 import { Clock, Award, Users, Sparkles, CheckCircle2, Play, FileText } from 'lucide-react';
+import BuyButton from '@/components/course/BuyButton';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const res = await getCourseBySlug(slug);
-  
+
   if (!res.success || !res.data?.course) {
     return { title: 'Course Not Found' };
   }
-  
+
   const course = res.data.course;
   return {
     title: `${course.courseName} - Sprintern`,
@@ -52,14 +53,14 @@ export default async function CourseDetailPage({
                   <span className="font-semibold">FREE Day 1 Access</span>
                 </div>
 
-                <h1 
+                <h1
                   className="text-4xl md:text-5xl font-bold text-white mb-4"
                   style={{ fontFamily: 'var(--font-outfit)' }}
                 >
                   {course.courseName}
                 </h1>
 
-                <p 
+                <p
                   className="text-white/80 text-lg mb-6"
                   style={{ fontFamily: 'var(--font-poppins)' }}
                 >
@@ -103,12 +104,12 @@ export default async function CourseDetailPage({
                   >
                     Try Day 1 for FREE
                   </Link>
-                  <button
-                    className="px-8 py-4 rounded-xl border-2 border-white/30 text-white font-semibold hover:bg-white/10 transition-all"
-                    style={{ fontFamily: 'var(--font-poppins)' }}
-                  >
-                    Buy Full Course
-                  </button>
+                  <BuyButton
+                    courseId={String(course.id)}
+                    courseName={course.courseName}
+                    coursePrice={course.coursePrice}
+                    slug={slug}
+                  />
                 </div>
               </div>
 
@@ -134,7 +135,7 @@ export default async function CourseDetailPage({
             <div className="lg:col-span-2">
               {/* What You'll Learn */}
               <div className="bg-white rounded-2xl p-8 shadow-sm mb-8">
-                <h2 
+                <h2
                   className="text-2xl font-bold text-gray-900 mb-6"
                   style={{ fontFamily: 'var(--font-outfit)' }}
                 >
@@ -172,7 +173,7 @@ export default async function CourseDetailPage({
 
               {/* Course Syllabus */}
               <div className="bg-white rounded-2xl p-8 shadow-sm">
-                <h2 
+                <h2
                   className="text-2xl font-bold text-gray-900 mb-6"
                   style={{ fontFamily: 'var(--font-outfit)' }}
                 >
@@ -180,20 +181,18 @@ export default async function CourseDetailPage({
                 </h2>
                 <div className="space-y-4">
                   {Array.from({ length: moduleCount }, (_, i) => (
-                    <div 
-                      key={i} 
-                      className={`flex items-center justify-between p-4 rounded-xl border ${
-                        i === 0 
-                          ? 'border-green-500 bg-green-50' 
+                    <div
+                      key={i}
+                      className={`flex items-center justify-between p-4 rounded-xl border ${i === 0
+                          ? 'border-green-500 bg-green-50'
                           : 'border-gray-200 bg-gray-50'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                          i === 0 
-                            ? 'bg-green-500 text-white' 
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${i === 0
+                            ? 'bg-green-500 text-white'
                             : 'bg-gray-200 text-gray-600'
-                        }`}>
+                          }`}>
                           {i + 1}
                         </div>
                         <div>
@@ -224,7 +223,7 @@ export default async function CourseDetailPage({
             {/* Sidebar */}
             <div>
               <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
-                <h3 
+                <h3
                   className="text-xl font-bold text-gray-900 mb-4"
                   style={{ fontFamily: 'var(--font-outfit)' }}
                 >

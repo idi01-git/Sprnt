@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Calendar, Zap, Target, Trophy, ChevronRight, CheckCircle2, Rocket, BookOpen, Code } from 'lucide-react';
 import StatsLoop from './StatsLoop';
 
@@ -395,7 +396,22 @@ export function Timeline() {
               </p>
 
               {/* Enhanced 3D CTA Button */}
-              <button className="relative group/btn inline-block">
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/auth/session', { credentials: 'include' });
+                    const data = await res.json().catch(() => null);
+                    if (data?.success && data?.data?.user) {
+                      window.location.href = '/courses';
+                    } else {
+                      window.location.href = '/register';
+                    }
+                  } catch {
+                    window.location.href = '/register';
+                  }
+                }}
+                className="relative group/btn inline-block"
+              >
                 {/* 3D Shadow layers */}
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-800 to-blue-800 rounded-2xl transform translate-y-1 translate-x-1 group-hover/btn:translate-y-2 group-hover/btn:translate-x-2 transition-all duration-300 ease-out" />
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-blue-700 rounded-2xl transform translate-y-0.5 translate-x-0.5 opacity-50" />

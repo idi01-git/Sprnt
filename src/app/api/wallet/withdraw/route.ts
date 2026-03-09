@@ -46,6 +46,18 @@ export async function POST(request: NextRequest) {
 
         const { amount, upiId } = parsed.data
 
+        // Minimum withdrawal amount check (per PRD: ₹100)
+        const MIN_WITHDRAWAL_AMOUNT = 100
+        if (amount < MIN_WITHDRAWAL_AMOUNT) {
+            return createErrorResponse(
+                ErrorCode.WALLET_WITHDRAWAL_MIN_AMOUNT,
+                `Minimum withdrawal amount is ₹${MIN_WITHDRAWAL_AMOUNT}`,
+                HttpStatus.UNPROCESSABLE_ENTITY
+            )
+        }
+
+        const now = new Date()
+
         // Atomic transaction: check balance + create withdrawal
         const result = await prisma.$transaction(async (tx) => {
             // 1. Check for existing pending withdrawal
@@ -56,18 +68,43 @@ export async function POST(request: NextRequest) {
                 return { error: 'WALLET_WITHDRAWAL_PENDING' as const }
             }
 
-            // 2. Get current balance
-            const userData = await tx.user.findUnique({
-                where: { id: user.id },
-                select: { walletBalance: true },
-            })
+            // 2. Get current balance and calculate locked referrals
+            const [userData, lockedReferrals] = await Promise.all([
+                tx.user.findUnique({
+                    where: { id: user.id },
+                    select: { walletBalance: true },
+                }),
+                tx.referral.aggregate({
+                    where: {
+                        referrerId: user.id,
+                        status: 'pending',
+                        withdrawalEligibleAt: { gt: now },
+                    },
+                    _sum: { amount: true },
+                }),
+            ])
 
-            const balance = Number(userData?.walletBalance ?? 0)
-            if (balance < amount) {
+            const totalBalance = Number(userData?.walletBalance ?? 0)
+            const lockedFromReferrals = Number(lockedReferrals._sum.amount ?? 0)
+
+            // Calculate available balance (total - locked referrals - pending withdrawals)
+            // Note: pending withdrawal amount is already deducted from walletBalance when created
+            const availableBalance = Math.max(0, totalBalance - lockedFromReferrals)
+
+            if (availableBalance < amount) {
                 return { error: 'WALLET_INSUFFICIENT_BALANCE' as const }
             }
 
-            // 3. Create withdrawal request
+            // 3. Deduct balance from wallet and update UPI ID (show as pending withdrawal)
+            await tx.user.update({
+                where: { id: user.id },
+                data: { 
+                    walletBalance: { decrement: amount },
+                    upiId: upiId,
+                },
+            })
+
+            // 4. Create withdrawal request
             const withdrawal = await tx.withdrawalRequest.create({
                 data: {
                     userId: user.id,
@@ -75,12 +112,6 @@ export async function POST(request: NextRequest) {
                     upiId,
                     status: 'pending',
                 },
-            })
-
-            // 4. Update user's UPI ID if different
-            await tx.user.update({
-                where: { id: user.id },
-                data: { upiId },
             })
 
             return { withdrawal }

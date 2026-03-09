@@ -25,8 +25,10 @@ export async function GET(_request: NextRequest) {
             )
         }
 
-        // Parallel queries for balance, pending withdrawals, and locked funds
-        const [userData, pendingWithdrawal, pendingAmount] = await Promise.all([
+        const now = new Date()
+
+        // Parallel queries for balance, pending withdrawals, and locked funds from referrals
+        const [userData, pendingWithdrawal, pendingWithdrawalAmount, lockedReferrals] = await Promise.all([
             prisma.user.findUnique({
                 where: { id: user.id },
                 select: { walletBalance: true, upiId: true },
@@ -39,20 +41,48 @@ export async function GET(_request: NextRequest) {
                 where: { userId: user.id, status: 'pending' },
                 _sum: { amount: true },
             }),
+            // Find referrals where withdrawal is not yet eligible (7-day lock period)
+            prisma.referral.aggregate({
+                where: {
+                    referrerId: user.id,
+                    status: 'pending',
+                    withdrawalEligibleAt: { gt: now },
+                },
+                _sum: { amount: true },
+            }),
         ])
 
         const totalBalance = Number(userData?.walletBalance ?? 0)
-        const lockedAmount = Number(pendingAmount._sum.amount ?? 0)
-        const availableBalance = Math.max(0, totalBalance - lockedAmount)
+        const pendingWithdrawalAmountValue = Number(pendingWithdrawalAmount._sum.amount ?? 0)
+        const lockedFromReferrals = Number(lockedReferrals._sum.amount ?? 0)
+
+        // Total locked = pending withdrawals + locked referral totalLocked = pendingWithdrawalAmountValue + lockedFromRefer earnings
+        constrals
+
+        // Available balance = total - locked (what can be withdrawn now)
+        const availableBalance = Math.max(0, totalBalance - totalLocked)
+
+        // Total withdrawn (for reference)
+        const totalWithdrawn = await prisma.transaction.aggregate({
+            where: {
+                userId: user.id,
+                transactionType: 'withdrawal',
+                status: 'completed',
+            },
+            _sum: { amount: true },
+        })
 
         return createSuccessResponse({
             wallet: {
                 totalBalance,
                 availableBalance,
-                lockedAmount,
+                lockedBalance: totalLocked,
+                pendingWithdrawal: pendingWithdrawalAmountValue,
+                lockedFromReferrals,
+                totalWithdrawn: Math.abs(Number(totalWithdrawn._sum.amount ?? 0)),
                 upiId: userData?.upiId ?? null,
                 hasPendingWithdrawal: !!pendingWithdrawal,
-                pendingWithdrawal: pendingWithdrawal
+                pendingWithdrawalDetails: pendingWithdrawal
                     ? {
                         id: pendingWithdrawal.id,
                         amount: Number(pendingWithdrawal.amount),

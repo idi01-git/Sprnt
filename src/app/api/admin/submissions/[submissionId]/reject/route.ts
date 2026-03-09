@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, badRequest, notFound, serverError, HttpStatus } from '@/lib/api-response'
+import { createSuccessResponse, createErrorResponse, badRequest, notFound, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
 import { adminRejectSubmissionSchema } from '@/lib/validations/admin'
 import { logAdminAction } from '@/lib/admin-logger'
 
@@ -28,11 +28,12 @@ export async function POST(
             data: {
                 reviewStatus: 'rejected',
                 adminNotes: parsed.data.adminNotes,
-                reviewCompletedAt: new Date()
+                reviewCompletedAt: new Date(),
+                resubmissionCount: { increment: 1 }, // Increment resubmission count
             },
         })
 
-        const canResubmit = submission.resubmissionCount < submission.maxResubmissions
+        const canResubmit = updated.resubmissionCount < updated.maxResubmissions
 
         await prisma.notification.create({
             data: {
@@ -40,7 +41,7 @@ export async function POST(
                 type: 'submission_rejected',
                 title: 'Submission Requires Changes',
                 message: canResubmit
-                    ? `Your submission was not approved. You can resubmit (${submission.maxResubmissions - submission.resubmissionCount} attempts remaining).`
+                    ? `Your submission was not approved. You can resubmit (${updated.maxResubmissions - updated.resubmissionCount} attempts remaining).`
                     : `Your submission was not approved. Maximum resubmission attempts reached.`,
             },
         })
@@ -50,7 +51,11 @@ export async function POST(
         return createSuccessResponse({ message: 'Submission rejected', canResubmit })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(
+                ErrorCode.ADMIN_AUTH_REQUIRED,
+                'Admin authentication required',
+                HttpStatus.UNAUTHORIZED
+            )
         }
         console.error('[POST /api/admin/submissions/[submissionId]/reject]', error)
         return serverError()

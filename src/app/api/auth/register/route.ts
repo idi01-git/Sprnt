@@ -1,7 +1,9 @@
+import { randomBytes, createHash } from 'crypto'
 import { hash } from 'argon2'
 import { prisma } from '@/lib/db'
 import { createSession } from '@/lib/auth/session'
 import { registerSchema } from '@/lib/validations/auth'
+import { sendWelcomeEmail, sendVerificationEmail } from '@/lib/email'
 import {
     createSuccessResponse,
     createErrorResponse,
@@ -87,10 +89,29 @@ export async function POST(request: Request) {
             },
         })
 
-        // 6. Create session (sets HttpOnly cookie)
+        // 6. Generate email verification token (24-hour expiry) and send emails
+        const rawVerifyToken = randomBytes(32).toString('hex')
+        const verifyTokenHash = createHash('sha256').update(rawVerifyToken).digest('hex')
+
+        await prisma.authToken.create({
+            data: {
+                userId: user.id,
+                tokenHash: verifyTokenHash,
+                tokenType: 'email_verification',
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            },
+        })
+
+        // Fire-and-forget: send welcome + verification emails concurrently
+        Promise.all([
+            sendWelcomeEmail(user.email, user.name),
+            sendVerificationEmail(user.email, user.name, rawVerifyToken),
+        ]).catch((err) => console.error('[register] Failed to send emails:', err))
+
+        // 7. Create session (sets HttpOnly cookie)
         await createSession(user.id)
 
-        // 7. Return created user
+        // 8. Return created user
         return createSuccessResponse(
             {
                 user: {
@@ -108,3 +129,4 @@ export async function POST(request: Request) {
         return serverError('Failed to create account')
     }
 }
+

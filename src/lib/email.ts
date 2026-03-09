@@ -11,7 +11,7 @@ interface EmailOptions {
   replyTo?: string;
 }
 
-const DEFAULT_FROM = process.env.EMAIL_FROM || 'Sprintern <noreply@sprintern.in>';
+const DEFAULT_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
 export async function sendEmail({ to, subject, html, text, from, replyTo }: EmailOptions) {
   try {
@@ -238,5 +238,129 @@ export async function sendWithdrawalProcessedEmail(
       </html>
     `,
     text: `Your withdrawal of ₹${amount} has been processed to ${upiId}. Check your UPI app within 24 hours.`,
+  });
+}
+
+export async function sendPasswordResetEmail(email: string, name: string, resetToken: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+
+  return sendEmail({
+    to: email,
+    subject: 'Reset Your Sprintern Password 🔐',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: 'Poppins', Arial, sans-serif; background-color: #f9fafb;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: white; border-radius: 16px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+              <div style="text-align: center; margin-bottom: 32px;">
+                <h1 style="color: #9333ea; font-size: 28px; margin: 0;">🎓 Sprintern</h1>
+              </div>
+
+              <div style="text-align: center; margin-bottom: 24px;">
+                <span style="font-size: 48px;">🔐</span>
+              </div>
+
+              <h2 style="color: #1f2937; font-size: 22px; margin: 0 0 16px; text-align: center;">
+                Password Reset Request
+              </h2>
+
+              <p style="color: #6b7280; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                Hi ${name}, we received a request to reset the password for your Sprintern account.
+                Click the button below to set a new password. This link is valid for <strong>1 hour</strong>.
+              </p>
+
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${resetUrl}"
+                  style="display: inline-block; background: linear-gradient(135deg, #9333ea, #3b82f6); color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                  Reset Password →
+                </a>
+              </div>
+
+              <p style="color: #9ca3af; font-size: 14px; text-align: center; margin: 0 0 8px;">
+                If you didn't request a password reset, you can safely ignore this email.
+              </p>
+              <p style="color: #d1d5db; font-size: 12px; text-align: center; word-break: break-all;">
+                ${resetUrl}
+              </p>
+
+              <div style="border-top: 1px solid #f3f4f6; margin-top: 32px; padding-top: 24px;">
+                <p style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
+                  © 2026 Sprintern. All rights reserved.
+                </p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `Hi ${name}, reset your Sprintern password by visiting: ${resetUrl}. This link expires in 1 hour. If you didn't request this, ignore this email.`,
+  });
+}
+
+export async function sendVerificationEmail(email: string, name: string, verifyToken: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const verifyUrl = `${baseUrl}/verify-email?token=${verifyToken}`;
+
+  return sendEmail({
+    to: email,
+    subject: 'Verify Your Sprintern Email ✉️',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: 'Poppins', Arial, sans-serif; background-color: #f9fafb;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: white; border-radius: 16px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+              <div style="text-align: center; margin-bottom: 32px;">
+                <h1 style="color: #9333ea; font-size: 28px; margin: 0;">🎓 Sprintern</h1>
+              </div>
+
+              <div style="text-align: center; margin-bottom: 24px;">
+                <span style="font-size: 48px;">✉️</span>
+              </div>
+
+              <h2 style="color: #1f2937; font-size: 22px; margin: 0 0 16px; text-align: center;">
+                Verify Your Email Address
+              </h2>
+
+              <p style="color: #6b7280; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                Hi ${name}, thanks for signing up! Please verify your email address to unlock all features.
+                This link is valid for <strong>24 hours</strong>.
+              </p>
+
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${verifyUrl}"
+                  style="display: inline-block; background: linear-gradient(135deg, #9333ea, #3b82f6); color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                  Verify Email →
+                </a>
+              </div>
+
+              <p style="color: #9ca3af; font-size: 14px; text-align: center; margin: 0 0 8px;">
+                If you didn't create a Sprintern account, you can safely ignore this email.
+              </p>
+              <p style="color: #d1d5db; font-size: 12px; text-align: center; word-break: break-all;">
+                ${verifyUrl}
+              </p>
+
+              <div style="border-top: 1px solid #f3f4f6; margin-top: 32px; padding-top: 24px;">
+                <p style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
+                  © 2026 Sprintern. All rights reserved.
+                </p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `Hi ${name}, verify your Sprintern email by visiting: ${verifyUrl}. This link expires in 24 hours. If you didn't sign up, ignore this email.`,
   });
 }

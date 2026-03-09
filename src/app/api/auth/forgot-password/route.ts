@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'crypto'
 import { prisma } from '@/lib/db'
 import { forgotPasswordSchema } from '@/lib/validations/auth'
+import { sendPasswordResetEmail } from '@/lib/email'
 import {
     createSuccessResponse,
     createErrorResponse,
@@ -12,7 +13,7 @@ import {
 
 /**
  * POST /api/auth/forgot-password
- * Generate password reset token and (TODO) send email
+ * Generate password reset token and send password reset email via Resend
  */
 export async function POST(request: Request) {
     try {
@@ -36,13 +37,12 @@ export async function POST(request: Request) {
         // Even if the email doesn't exist, we respond identically
         const user = await prisma.user.findUnique({
             where: { email, deletedAt: null },
-            select: { id: true },
+            select: { id: true, name: true },
         })
 
         if (user) {
             // Generate a secure random token
             const rawToken = randomBytes(32).toString('hex')
-            // console.log('>>> DEBUG: RAW RESET TOKEN:', rawToken)
             const tokenHash = createHash('sha256').update(rawToken).digest('hex')
 
             // Invalidate any prior reset tokens for this user
@@ -65,9 +65,10 @@ export async function POST(request: Request) {
                 },
             })
 
-            // TODO: Send email with reset link containing rawToken
-            // await sendPasswordResetEmail(email, rawToken)
-            console.info(`[forgot-password] Reset token generated for ${email}`)
+            // Send password reset email (fire-and-forget — email failure must not block response)
+            sendPasswordResetEmail(email, user.name, rawToken).catch((err) =>
+                console.error('[forgot-password] Failed to send reset email:', err)
+            )
         }
 
         return createSuccessResponse({

@@ -37,12 +37,27 @@ export async function POST(
                     processedAt: new Date(),
                 },
             }),
+            // Refund the balance back to user wallet (balance was deducted when request was created)
+            prisma.user.update({
+                where: { id: withdrawal.userId },
+                data: { walletBalance: { increment: withdrawal.amount } },
+            }),
+            prisma.transaction.create({
+                data: {
+                    userId: withdrawal.userId,
+                    transactionType: 'withdrawal',
+                    amount: Number(withdrawal.amount), // Positive for refund
+                    status: 'completed',
+                    withdrawalRequestId: withdrawalId,
+                    reason: `Rejected: ${parsed.data.reason}`,
+                },
+            }),
             prisma.notification.create({
                 data: {
                     userId: withdrawal.userId,
                     type: 'withdrawal_rejected',
                     title: 'Withdrawal Rejected',
-                    message: `Your withdrawal request was rejected. Reason: ${parsed.data.reason}`,
+                    message: `Your withdrawal request was rejected. Reason: ${parsed.data.reason}. Your wallet balance has been refunded.`,
                 },
             }),
         ])
