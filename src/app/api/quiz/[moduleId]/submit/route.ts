@@ -11,12 +11,6 @@ import {
     ErrorCode,
 } from '@/lib/api-response'
 
-interface StoredQuestion {
-    question: string
-    options: string[]
-    correctAnswer: string
-}
-
 const submitQuizSchema = z.object({
     enrollmentId: z.string().min(1),
     answers: z.array(z.string()).min(1),
@@ -70,12 +64,11 @@ export async function POST(
             )
         }
 
-        // Get the module and correct answers
+        // Get the module
         const courseModule = await prisma.courseModule.findUnique({
             where: { id: moduleId },
             select: {
                 dayNumber: true,
-                quizQuestions: true,
             },
         })
 
@@ -87,15 +80,15 @@ export async function POST(
             )
         }
 
-        const storedQuestions = courseModule.quizQuestions as unknown as StoredQuestion[]
-        const correctAnswers = storedQuestions.map((q) => q.correctAnswer)
+        // Convert string answers to integers (answers are "0", "1", "2", "3" format)
+        const numericAnswers = answers.map((a) => parseInt(a, 10))
 
         // Submit quiz via the atomic transaction handler
         const quizResult = await submitQuiz(
             enrollmentId,
             courseModule.dayNumber,
-            answers,
-            correctAnswers
+            numericAnswers,
+            moduleId
         )
 
         return createSuccessResponse({

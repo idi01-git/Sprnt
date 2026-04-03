@@ -79,11 +79,10 @@ export async function GET(
             where: { id: enrollment.courseId },
             select: {
                 problemStatementText: true,
-                problemStatementPdfUrl: true,
             },
         })
 
-        if (!course?.problemStatementText && !course?.problemStatementPdfUrl) {
+        if (!course?.problemStatementText) {
             return createErrorResponse(
                 ErrorCode.NOT_FOUND,
                 'Problem statement not available for this course',
@@ -94,7 +93,6 @@ export async function GET(
         return createSuccessResponse({
             enrollmentId: enrollment.id,
             problemStatementText: course.problemStatementText,
-            problemStatementPdfUrl: course.problemStatementPdfUrl,
         })
     } catch (error) {
         console.error('[GET /api/learn/[enrollmentId]/problem-statement]', error)

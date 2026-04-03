@@ -13,7 +13,7 @@ const HeroSection = () => {
   const imgRef = useRef<HTMLDivElement | null>(null);
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-purple-50 via-white to-blue-50 pt-24 pb-20">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-linear-to-br from-purple-50 via-white to-blue-50 pt-24 pb-20">
       {/* Animated Background Elements */}
       <BackgroundEffect variant="gradient" />
       <FloatingParticles count={15} color="#a855f7" />
@@ -27,7 +27,7 @@ const HeroSection = () => {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 animate-fade-in animation-delay-300 relative group"
             >
               {/* Enhanced Glassmorphic Badge */}
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-xl rounded-full border border-purple-300/50"
+              <div className="absolute inset-0 bg-linear-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-xl rounded-full border border-purple-300/50"
                 style={{ boxShadow: '0 8px 32px rgba(139, 92, 246, 0.15), inset 0 0 20px rgba(255, 255, 255, 0.1)' }}
               />
               <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
@@ -47,7 +47,7 @@ const HeroSection = () => {
             </div>
 
             <h1
-              className="mb-6 bg-gradient-to-r from-purple-900 via-blue-900 to-purple-900 bg-clip-text text-transparent animate-fade-in animation-delay-400"
+              className="mb-6 bg-linear-to-r from-purple-900 via-blue-900 to-purple-900 bg-clip-text text-transparent animate-fade-in animation-delay-400"
               style={{ 
                 fontFamily: "'Outfit', sans-serif",
                 fontWeight: 800,
@@ -59,7 +59,7 @@ const HeroSection = () => {
               <span className="relative inline-block">
                 14 Days
                 <div
-                  className="absolute -bottom-2 left-0 right-0 h-3 bg-gradient-to-r from-purple-400 to-blue-400 opacity-30 rounded animate-expand-width animation-delay-1000"
+                  className="absolute -bottom-2 left-0 right-0 h-3 bg-linear-to-r from-purple-400 to-blue-400 opacity-30 rounded animate-expand-width animation-delay-1000"
                 />
               </span>
             </h1>
@@ -90,8 +90,8 @@ const HeroSection = () => {
                   fontSize: '16px'
                 }}
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600" />
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-purple-500 to-blue-500" />
+                <div className="absolute inset-0 bg-linear-to-r from-purple-600 to-blue-600" />
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-linear-to-r from-purple-500 to-blue-500" />
                 <span className="relative text-white z-10 flex items-center gap-2">
                   Explore Internships
                   <TrendingUp className="w-5 h-5" />
@@ -184,7 +184,7 @@ const HeroSection = () => {
                     className="relative rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/20 transition-transform duration-500"
                     style={{ transformStyle: 'preserve-3d' }}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
+                    <div className="absolute inset-0 bg-linear-to-br from-purple-600/20 to-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
                     <Image
                       src={item.img}
                       alt="Engineering Software"
@@ -200,7 +200,7 @@ const HeroSection = () => {
 
             {/* Floating Elements */}
             <div
-              className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-lg shadow-orange-500/50 flex items-center justify-center animate-float"
+              className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-linear-to-br from-yellow-400 to-orange-500 shadow-lg shadow-orange-500/50 flex items-center justify-center animate-float"
               style={{ boxShadow: '0 0 30px rgba(251, 191, 36, 0.6)' }}
             >
               <Sparkles className="w-10 h-10 text-white" />

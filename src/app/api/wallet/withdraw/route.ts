@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
                     where: {
                         referrerId: user.id,
                         status: 'pending',
-                        withdrawalEligibleAt: { gt: now },
+                        autoApproveAt: { gt: now },
                     },
                     _sum: { amount: true },
                 }),

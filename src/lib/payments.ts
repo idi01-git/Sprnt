@@ -440,69 +440,105 @@ export async function processPaymentWebhook(
     amount: number,
     metadata?: Record<string, unknown>,
 ): Promise<WebhookProcessingResult> {
-    // ─── Step 1: Idempotency check ───────────────────────────────────────
-    // Find enrollment by Razorpay order ID
-    const enrollment = await prisma.enrollment.findUnique({
-        where: { paymentGatewayOrderId: orderId },
-    })
+    const REFERRAL_AMOUNT = 50
 
-    if (!enrollment) {
-        throw new PaymentError(
-            `No enrollment found for order: ${orderId}`,
-            ErrorCode.PAYMENT_FAILED,
-            404,
-        )
-    }
+    return await prisma.$transaction(async (tx) => {
+        const webhookLogId = `wh_${orderId}_${Date.now()}`
 
-    // Already processed? Return idempotent response.
-    if (enrollment.paymentStatus === 'success') {
-        console.info('[Payments] Idempotent skip — already processed:', {
-            enrollmentId: enrollment.id,
-            orderId,
-        })
-
-        return {
-            processed: false,
-            enrollmentId: enrollment.id,
-            status: 'success',
-            idempotent: true,
+        try {
+            await tx.$executeRaw`
+                INSERT INTO webhook_logs (id, razorpay_order_id, webhook_type, payload, status, processed_at)
+                VALUES (
+                    ${webhookLogId},
+                    ${orderId},
+                    'payment_captured',
+                    ${JSON.stringify(metadata ?? {})}::jsonb,
+                    'success',
+                    NOW()
+                )
+                ON CONFLICT (razorpay_order_id) DO NOTHING
+            `
+        } catch (err) {
+            console.debug('[Payments] Webhook log conflict (expected for duplicates):', orderId)
         }
-    }
 
-    // ─── Step 2: Amount mismatch guard ───────────────────────────────────
-    const expectedAmountPaise = enrollment.amountPaid.toNumber() * 100
-
-    if (amount !== expectedAmountPaise) {
-        console.error('[Payments] Amount mismatch:', {
-            enrollmentId: enrollment.id,
-            expected: expectedAmountPaise,
-            received: amount,
+        const existingLog = await tx.webhookLog.findUnique({
+            where: { razorpayOrderId: orderId },
         })
 
-        // Mark as failed, don't process
-        await prisma.enrollment.update({
-            where: { id: enrollment.id },
-            data: {
-                paymentStatus: 'failed',
-                paymentMetadata: {
-                    error: 'amount_mismatch',
-                    expectedPaise: expectedAmountPaise,
-                    receivedPaise: amount,
-                    timestamp: new Date().toISOString(),
+        if (existingLog && existingLog.status === 'success') {
+            const enrollment = await tx.enrollment.findUnique({
+                where: { paymentGatewayOrderId: orderId },
+                select: { id: true },
+            })
+
+            console.info('[Payments] Idempotent skip — already processed:', {
+                enrollmentId: enrollment?.id,
+                orderId,
+            })
+
+            return {
+                processed: false,
+                enrollmentId: enrollment?.id ?? orderId,
+                status: 'success',
+                idempotent: true,
+            }
+        }
+
+        const enrollment = await tx.enrollment.findUnique({
+            where: { paymentGatewayOrderId: orderId },
+        })
+
+        if (!enrollment) {
+            throw new PaymentError(
+                `No enrollment found for order: ${orderId}`,
+                ErrorCode.PAYMENT_FAILED,
+                404,
+            )
+        }
+
+        if (enrollment.paymentStatus === 'success') {
+            return {
+                processed: false,
+                enrollmentId: enrollment.id,
+                status: 'success',
+                idempotent: true,
+            }
+        }
+
+        const expectedAmountPaise = enrollment.amountPaid.toNumber() * 100
+
+        if (amount !== expectedAmountPaise) {
+            await tx.enrollment.update({
+                where: { id: enrollment.id },
+                data: {
+                    paymentStatus: 'failed',
+                    paymentMetadata: {
+                        error: 'amount_mismatch',
+                        expectedPaise: expectedAmountPaise,
+                        receivedPaise: amount,
+                        timestamp: new Date().toISOString(),
+                    } as unknown as Prisma.InputJsonValue,
                 },
-            },
-        })
+            })
 
-        throw new PaymentError(
-            `Amount mismatch: expected ${expectedAmountPaise} paise, received ${amount} paise`,
-            ErrorCode.PAYMENT_VERIFICATION_FAILED,
-            400,
-        )
-    }
+            if (existingLog) {
+                await tx.webhookLog.update({
+                    where: { id: existingLog.id },
+                    data: {
+                        status: 'failed',
+                        errorMessage: `Amount mismatch: expected ${expectedAmountPaise} paise, received ${amount} paise`,
+                    },
+                })
+            }
 
-    // ─── Step 3: Mark as paid and initialize enrollment ───────────────────────
-    await prisma.$transaction(async (tx) => {
-        // Mark enrollment as successful
+            throw new PaymentError(
+                `Amount mismatch: expected ${expectedAmountPaise} paise, received ${amount} paise`,
+                ErrorCode.PAYMENT_VERIFICATION_FAILED,
+                400,
+            )
+        }
+
         await tx.enrollment.update({
             where: { id: enrollment.id },
             data: {
@@ -515,11 +551,18 @@ export async function processPaymentWebhook(
             },
         })
 
-        // Initialize all 7 days progress (Day 1 unlocked, Days 2-7 locked)
-        const records = Array.from({ length: 7 }, (_, i) => ({
+        // Get actual module count for this course
+        const courseData = await tx.course.findUnique({
+            where: { id: enrollment.courseId },
+            select: { _count: { select: { modules: true } } },
+        })
+        const moduleCount = courseData?._count.modules || 7
+
+        // Create dailyProgress based on actual module count
+        const records = Array.from({ length: moduleCount }, (_, i) => ({
             enrollmentId: enrollment.id,
             dayNumber: i + 1,
-            isLocked: i !== 0, // Day 1 is unlocked, rest are locked
+            isLocked: i !== 0,
             unlockedAt: i === 0 ? new Date() : null,
         }))
         await tx.dailyProgress.createMany({
@@ -527,7 +570,6 @@ export async function processPaymentWebhook(
             skipDuplicates: true,
         })
 
-        // Record the transaction
         await tx.transaction.create({
             data: {
                 userId: enrollment.userId,
@@ -541,7 +583,6 @@ export async function processPaymentWebhook(
             },
         })
 
-        // Record promocode usage if applicable
         if (enrollment.promocodeUsed) {
             const promo = await tx.promocode.findUnique({
                 where: { code: enrollment.promocodeUsed },
@@ -558,7 +599,6 @@ export async function processPaymentWebhook(
                     },
                 })
 
-                // Increment global usage count
                 await tx.promocode.update({
                     where: { id: promo.id },
                     data: { usageCount: { increment: 1 } },
@@ -566,61 +606,66 @@ export async function processPaymentWebhook(
             }
         }
 
-        // Handle referral: credit referrer if applicable
         const user = await tx.user.findUnique({
             where: { id: enrollment.userId },
             select: { referredBy: true },
         })
 
         if (user?.referredBy) {
-            // Credit referrer's wallet
-            const referralCreditAmount = 50 // Default ₹50 per PRD
-            await tx.user.update({
-                where: { id: user.referredBy },
-                data: { walletBalance: { increment: referralCreditAmount } },
+            // Check if referral already exists (idempotency)
+            const existingReferral = await tx.referral.findFirst({
+                where: { refereeId: enrollment.userId },
             })
 
-            // Set 7-day lock period before withdrawal is eligible (per PRD)
-            const withdrawalEligibleAt = new Date()
-            withdrawalEligibleAt.setDate(withdrawalEligibleAt.getDate() + 7)
+            if (!existingReferral) {
+                // Get the referrer's referral code
+                const referrer = await tx.user.findUnique({
+                    where: { id: user.referredBy },
+                    select: { referralCode: true },
+                })
 
-            // Create referral record
-            await tx.referral.create({
-                data: {
+                const referralCodeUsed = referrer?.referralCode || ''
+                const autoApproveAt = new Date()
+                autoApproveAt.setDate(autoApproveAt.getDate() + 7)
+
+                await tx.referral.create({
+                    data: {
+                        referrerId: user.referredBy,
+                        refereeId: enrollment.userId,
+                        referralCodeUsed,
+                        status: 'pending',
+                        amount: REFERRAL_AMOUNT,
+                        autoApproveAt,
+                    },
+                })
+
+                console.info('[Payments] Referral credited via webhook:', {
                     referrerId: user.referredBy,
                     refereeId: enrollment.userId,
-                    referralCodeUsed: '', // Would need to look up
-                    status: 'pending',
-                    amount: referralCreditAmount,
-                    withdrawalEligibleAt: withdrawalEligibleAt,
-                },
-            })
-
-            // Create transaction for referrer
-            await tx.transaction.create({
-                data: {
-                    userId: user.referredBy,
-                    transactionType: 'referral_credit',
-                    amount: referralCreditAmount,
-                    enrollmentId: enrollment.id,
-                },
-            })
+                    referralCodeUsed,
+                    amount: REFERRAL_AMOUNT,
+                })
+            } else {
+                console.info('[Payments] Referral already exists, skipping:', existingReferral.id);
+            }
         }
-    })
 
-    console.info('[Payments] Payment processed successfully:', {
-        enrollmentId: enrollment.id,
-        orderId,
-        paymentId,
-        amount,
-    })
+        console.info('[Payments] Payment processed successfully:', {
+            enrollmentId: enrollment.id,
+            orderId,
+            paymentId,
+            amount,
+        })
 
-    return {
-        processed: true,
-        enrollmentId: enrollment.id,
-        status: 'success',
-        idempotent: false,
-    }
+        return {
+            processed: true,
+            enrollmentId: enrollment.id,
+            status: 'success',
+            idempotent: false,
+        }
+    }, {
+        isolationLevel: 'Serializable',
+    })
 }
 
 // =============================================================================

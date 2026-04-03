@@ -34,29 +34,6 @@ export async function GET(request: NextRequest) {
         const startDate = new Date()
         startDate.setDate(startDate.getDate() - days)
 
-        // Try pre-computed analytics first
-        const analyticsData = await prisma.analyticsDaily.findMany({
-            where: { date: { gte: startDate } },
-            orderBy: { date: 'asc' },
-            select: {
-                date: true,
-                newUsers: true,
-                activeUsers: true,
-            },
-        })
-
-        if (analyticsData.length > 0) {
-            return createSuccessResponse({
-                chart: analyticsData.map((d) => ({
-                    date: d.date,
-                    newUsers: d.newUsers,
-                    activeUsers: d.activeUsers,
-                })),
-                source: 'pre_computed',
-            })
-        }
-
-        // Fallback: raw groupBy from users
         const users = await prisma.user.groupBy({
             by: ['createdAt'],
             where: {

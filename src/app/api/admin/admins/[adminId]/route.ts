@@ -23,17 +23,10 @@ export async function GET(
 
         if (!admin) return notFound('Admin')
 
-        const recentLogs = await prisma.adminLog.findMany({
-            where: { adminId },
-            take: 10,
-            orderBy: { timestamp: 'desc' },
-        })
-
         const { passwordHash, ...safeAdmin } = admin
 
         return createSuccessResponse({
             ...safeAdmin,
-            recentLogs,
         })
     } catch (error) {
         if (error instanceof AuthError) {

@@ -18,7 +18,7 @@ export async function GET(_request: NextRequest) {
     try {
         await requirePermission('analytics:view')
 
-        // Get all active courses with enrollment & certificate counts
+        // Get all active courses with enrollment counts
         const courses = await prisma.course.findMany({
             where: { isActive: true, deletedAt: null },
             select: {
@@ -29,7 +29,6 @@ export async function GET(_request: NextRequest) {
                 _count: {
                     select: {
                         enrollments: true,
-                        certificates: true,
                     },
                 },
             },
@@ -89,7 +88,7 @@ export async function GET(_request: NextRequest) {
                 totalEnrollments,
                 completedEnrollments: completedCount,
                 completionRate,
-                certificatesIssued: course._count.certificates,
+                certificatesIssued: 0,
                 totalRevenue: revenueMap.get(course.id) ?? 0,
             }
         })

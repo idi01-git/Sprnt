@@ -102,7 +102,6 @@ export class PrismaAdapter implements Adapter {
                     id: admin.id,
                     attributes: {
                         email: admin.email,
-                        username: admin.username,
                         role: admin.role,
                         isActive: admin.isActive,
                     },

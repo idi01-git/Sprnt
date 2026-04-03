@@ -22,14 +22,16 @@ import {
   TrendingUp,
   DollarSign,
   UserPlus,
-  BarChart3
+  BarChart3,
+  Shield,
+  FileClock
 } from 'lucide-react';
 
 interface AdminUser {
   id: string;
-  name: string;
   email: string;
   role: string;
+  isActive: boolean;
 }
 
 const poppins: React.CSSProperties = { fontFamily: "'Poppins', sans-serif" };
@@ -45,6 +47,8 @@ const navItems = [
   { href: '/admin/withdrawals', icon: Wallet, label: 'Withdrawals', badge: true },
   { href: '/admin/promocodes', icon: Tag, label: 'Promocodes' },
   { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/admin/accounts', icon: Shield, label: 'Accounts', superAdminOnly: true },
+  { href: '/admin/logs', icon: FileClock, label: 'Audit Logs', superAdminOnly: true },
   { href: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -64,8 +68,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     fetch('/api/admin/auth/session', { credentials: 'include' })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        if (data?.success && data?.data?.user) {
-          setAdminUser(data.data.user);
+        if (data?.success && data?.data?.admin) {
+          setAdminUser(data.data.admin);
         }
       })
       .catch(() => { });
@@ -88,14 +92,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const totalBadges = actionItems.pendingSubmissions + actionItems.pendingWithdrawals;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div
+      className="min-h-screen bg-gray-50 flex"
+      style={{ colorScheme: 'light', ['--foreground' as any]: '#111827', ['--background' as any]: '#ffffff' }}
+    >
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-gray-900 to-gray-800 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-linear-to-b from-gray-900 to-gray-800 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <Link href="/admin" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-linear-to-r from-purple-600 to-blue-600 flex items-center justify-center">
               <span className="text-white font-bold text-sm">S</span>
             </div>
             <span className="text-white font-bold" style={{ ...outfit, fontWeight: 800 }}>Sprintern</span>
@@ -105,29 +112,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </div>
 
-        <nav className="p-4 space-y-1">
-          {navItems.map((item) => {
+        <nav className="p-4 space-y-1 overflow-y-auto">
+          {navItems.map((item, idx) => {
+            // Show superAdminOnly items only to super_admin role
+            if ((item as any).superAdminOnly && adminUser?.role !== 'super_admin') return null;
             const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
             const showBadge = item.badge && totalBadges > 0;
-
+            // Divider before first superAdminOnly item
+            const prevItem = navItems[idx - 1];
+            const showDivider = (item as any).superAdminOnly && !(prevItem as any)?.superAdminOnly;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
-                style={{ ...poppins, fontWeight: 500, fontSize: '14px' }}
-              >
-                <div className="flex items-center gap-3">
-                  <item.icon className="w-5 h-5" />
-                  {item.label}
-                </div>
-                {showBadge && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                    {totalBadges}
-                  </span>
+              <div key={item.href}>
+                {showDivider && adminUser?.role === 'super_admin' && (
+                  <div className="border-t border-gray-700 my-2" />
                 )}
-              </Link>
+                <Link
+                  href={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-linear-to-r from-purple-600 to-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
+                  style={{ ...poppins, fontWeight: 500, fontSize: '14px' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="w-5 h-5" />
+                    {item.label}
+                  </div>
+                  {showBadge && (
+                    <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {totalBadges}
+                    </span>
+                  )}
+                </Link>
+              </div>
             );
           })}
         </nav>
@@ -180,11 +195,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors"
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold">
-                      {adminUser.name.charAt(0).toUpperCase()}
+                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold">
+                      {adminUser.email.charAt(0).toUpperCase()}
                     </div>
                     <span className="hidden sm:block text-sm text-gray-700" style={{ ...poppins, fontWeight: 500 }}>
-                      {adminUser.name}
+                      {adminUser.email}
                     </span>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -192,7 +207,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   {userMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
                       <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-gray-900" style={poppins}>{adminUser.name}</p>
+                        <p className="text-sm font-semibold text-gray-900" style={poppins}>{adminUser.email}</p>
                         <p className="text-xs text-gray-500" style={poppins}>{adminUser.email}</p>
                       </div>
                       <button

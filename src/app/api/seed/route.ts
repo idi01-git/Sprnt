@@ -20,28 +20,17 @@ export async function GET() {
         // 1. Clean Database (Delete in reverse order of dependencies)
         await prisma.$transaction([
             prisma.dailyProgress.deleteMany(),
-            prisma.videoView.deleteMany(),
-            prisma.submissionVersion.deleteMany(),
-            prisma.identityVerification.deleteMany(),
             prisma.submission.deleteMany(),
-            prisma.certificateVerification.deleteMany(),
-            prisma.certificate.deleteMany(),
             prisma.transaction.deleteMany(),
             prisma.withdrawalRequest.deleteMany(),
             prisma.referral.deleteMany(),
             prisma.promocodeUsage.deleteMany(),
             prisma.enrollment.deleteMany(),
-            prisma.videoAsset.deleteMany(),
             prisma.courseModule.deleteMany(),
             prisma.course.deleteMany(),
-            prisma.adminSession.deleteMany(),
             prisma.session.deleteMany(),
-            prisma.authToken.deleteMany(),
-            prisma.otpVerification.deleteMany(),
             prisma.promocode.deleteMany(),
-            prisma.notification.deleteMany(), // Added notifications
             // Finally users and admins
-            prisma.oAuthAccount.deleteMany(),
             prisma.admin.deleteMany(),
             prisma.user.deleteMany(),
         ])
@@ -50,13 +39,13 @@ export async function GET() {
 
         // --- ADMINS ---
         const superAdmin = await prisma.admin.create({
-            data: { username: 'superadmin', email: 'superadmin@sprintern.com', passwordHash: hashedPassword, role: 'super_admin', isActive: true },
+            data: { email: 'superadmin@sprintern.com', passwordHash: hashedPassword, role: 'super_admin', isActive: true },
         })
         const admin = await prisma.admin.create({
-            data: { username: 'admin', email: 'admin@sprintern.com', passwordHash: hashedPassword, role: 'admin', isActive: true },
+            data: { email: 'admin@sprintern.com', passwordHash: hashedPassword, role: 'admin', isActive: true },
         })
         const reviewer = await prisma.admin.create({
-            data: { username: 'reviewer', email: 'reviewer@sprintern.com', passwordHash: hashedPassword, role: 'reviewer', isActive: true },
+            data: { email: 'reviewer@sprintern.com', passwordHash: hashedPassword, role: 'reviewer', isActive: true },
         })
 
         // --- STUDENTS ---
@@ -122,39 +111,26 @@ export async function GET() {
             },
         })
 
-        // Module 1 (Free Preview, Video)
-        const mod1 = await prisma.courseModule.create({
+        // Module 1 (Free Preview)
+        await prisma.courseModule.create({
             data: {
                 courseId: courseFs.id,
                 dayNumber: 1,
                 title: 'Introduction to Web Development',
                 contentText: 'Welcome to the course! Today we will learn HTML and CSS basics.',
                 isFreePreview: true,
-                quizQuestions: [{ question: "What does HTML stand for?", options: ["Hyper Text Markup Language", "Home Tool Markup Language"], correctAnswer: 0 }],
-            }
-        })
-        // Video for Module 1
-        await prisma.videoAsset.create({
-            data: {
-                courseModuleId: mod1.id,
-                r2Key: 'videos/intro.mp4',
-                cdnUrl: 'https://cdn.sprintern.com/videos/intro.mp4',
-                fileSizeBytes: 1024000,
-                durationSeconds: 600,
-                uploadStatus: 'completed',
-                processingStatus: 'ready'
+                youtubeUrl: 'https://youtube.com/watch?v=intro',
             }
         })
 
         // Module 2 (Paid, Locked initially)
-        const mod2 = await prisma.courseModule.create({
+        await prisma.courseModule.create({
             data: {
                 courseId: courseFs.id,
                 dayNumber: 2,
                 title: 'Advanced React Hooks',
                 contentText: 'Deep dive into useEffect and useMemo.',
                 isFreePreview: false,
-                quizQuestions: [{ question: "What hook handles side effects?", options: ["useState", "useEffect"], correctAnswer: 1 }],
             }
         })
 
@@ -203,7 +179,6 @@ export async function GET() {
                 day7Completed: true,
                 certificateIssued: true,
                 certificateId: 'CERT-FSWD-001',
-                certificateUrl: 'https://cdn.sprintern.com/certs/CERT-FSWD-001.pdf',
                 completedAt: new Date(),
             }
         })
@@ -213,30 +188,19 @@ export async function GET() {
             data: {
                 enrollmentId: enrollGrad.id,
                 userId: gradStudent.id,
-                projectFileUrl: 'https://github.com/hermione/ecommerce',
-                reportPdfUrl: 'https://cdn.sprintern.com/reports/hermione.pdf',
+                fullName: gradStudent.name,
+                dob: null,
+                collegeName: 'Hogwarts',
+                collegeIdLink: 'https://college.edu/hermione',
+                branch: 'Computer Science',
+                graduationYear: 2024,
+                driveLink: 'https://drive.google.com/hermione',
                 reviewStatus: 'approved',
                 assignedAdminId: reviewer.id,
                 finalGrade: 9.5,
                 gradeCategory: 'Distinction',
                 submittedAt: new Date(Date.now() - 86400000), // Yesterday
                 reviewCompletedAt: new Date(),
-            }
-        })
-
-        // Certificate Entry
-        await prisma.certificate.create({
-            data: {
-                certificateId: 'CERT-FSWD-001',
-                enrollmentId: enrollGrad.id,
-                userId: gradStudent.id,
-                courseId: courseFs.id,
-                studentName: gradStudent.name,
-                collegeName: 'Hogwarts',
-                courseName: courseFs.courseName,
-                grade: 'Distinction',
-                certificateUrl: 'https://cdn.sprintern.com/certs/CERT-FSWD-001.pdf',
-                qrCodeData: 'https://sprintern.com/verify/CERT-FSWD-001',
             }
         })
 
@@ -250,7 +214,7 @@ export async function GET() {
                 referralCodeUsed: 'RICHIE999',
                 status: 'completed',
                 amount: 50.00,
-                paymentCompletedAt: new Date(),
+                completedAt: new Date(),
             }
         })
 
@@ -273,17 +237,6 @@ export async function GET() {
                 amount: 1000.00,
                 upiId: 'richie@upi',
                 status: 'pending',
-            }
-        })
-
-        // 6. Notifications
-        await prisma.notification.create({
-            data: {
-                userId: student.id,
-                title: 'Welcome to Sprintern!',
-                message: 'Your journey begins today. Start Module 1 now.',
-                type: 'system',
-                isRead: false,
             }
         })
 

@@ -89,7 +89,7 @@ export async function fetchApi<T>(
 }
 
 export interface Course {
-  id: number;
+  id: string;
   courseId: string;
   courseName: string;
   slug: string;
@@ -115,6 +115,10 @@ export interface CoursesResponse {
 
 export interface BranchesResponse {
   branches: Branch[];
+}
+
+export async function getAdminBranches(): Promise<ApiResponse<BranchesResponse>> {
+  return fetchApi<BranchesResponse>('/api/admin/courses/branches');
 }
 
 export async function getCourses(params?: {
@@ -154,6 +158,7 @@ export interface Enrollment {
   currentDay: number;
   day7Completed: boolean;
   certificateIssued: boolean;
+  certificateId: string | null;
   daysCompleted: number;
   totalDays: number;
   enrolledAt: string;
@@ -184,20 +189,23 @@ export async function getEnrollments(params?: EnrollmentsParams): Promise<ApiRes
 
 export interface DayContent {
   id: string;
-  enrollmentId: string;
   dayNumber: number;
   title: string;
   description: string;
+  moduleId: string;
+  notesPdfUrl: string | null;
+  youtubeUrl: string | null;
   videoUrl: string | null;
-  videoProvider: string | null;
-  videoId: string | null;
   content: string;
   resources: { title: string; url: string }[];
-  isUnlocked: boolean;
-  isCompleted: boolean;
-  quizPassed: boolean;
-  quizScore: number | null;
-  completedAt: string | null;
+  quiz: {
+    attempted: boolean;
+    passed: boolean;
+    attempts: number;
+    cooldownUntil: string | null;
+    cooldownActive: boolean;
+  };
+  isLocked: boolean;
 }
 
 export interface DayContentResponse {
@@ -265,7 +273,7 @@ export interface WalletBalance {
   pendingWithdrawal: {
     id: string;
     amount: number;
-    requestedAt: Date;
+    requestedAt: string;
   } | null;
 }
 
@@ -277,12 +285,35 @@ export async function getWalletBalance(): Promise<ApiResponse<WalletBalanceRespo
   return fetchApi<WalletBalanceResponse>('/api/wallet/balance');
 }
 
+export interface UserWithdrawal {
+  id: string;
+  amount: number;
+  upiId: string;
+  status: 'pending' | 'processing' | 'completed' | 'rejected';
+  rejectionReason: string | null;
+  transactionId: string | null;
+  requestedAt: string;
+  processedAt: string | null;
+}
+
+export interface UserWithdrawalsResponse {
+  withdrawals: UserWithdrawal[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function getUserWithdrawals(): Promise<ApiResponse<UserWithdrawalsResponse>> {
+  return fetchApi<UserWithdrawalsResponse>('/api/wallet/withdrawals');
+}
+
 export interface Transaction {
   id: string;
-  type: 'referral_bonus' | 'withdrawal' | 'earning';
+  type: 'course_purchase' | 'referral_credit' | 'withdrawal' | 'refund' | 'manual_credit' | 'manual_debit';
   amount: number;
   description: string;
-  status: 'pending' | 'completed' | 'rejected';
+  status: 'pending' | 'completed' | 'failed';
   createdAt: string;
 }
 
@@ -336,11 +367,12 @@ export interface Referral {
   id: string;
   referredUserEmail: string;
   referredUserName: string | null;
-  status: 'pending' | 'completed' | 'expired';
+  status: 'pending' | 'completed' | 'rejected';
   bonusAmount: number;
   enrolledCourseName: string | null;
   createdAt: string;
   convertedAt: string | null;
+  autoApproveAt: string | null;
 }
 
 export interface ReferralsResponse {
@@ -354,89 +386,17 @@ export async function getReferrals(page?: number, limit?: number): Promise<ApiRe
   if (limit) searchParams.set('limit', String(limit));
 
   const query = searchParams.toString();
-  return fetchApi<ReferralsResponse>(`/api/referrals${query ? `?${query}` : ''}`);
+  return fetchApi<ReferralsResponse>(`/api/referrals/list${query ? `?${query}` : ''}`);
 }
 
 export interface ReferralCodeResponse {
-  code: string;
+  code: string | null;
+  isActive: boolean;
+  shareUrl: string | null;
 }
 
 export async function getReferralCode(): Promise<ApiResponse<ReferralCodeResponse>> {
   return fetchApi<ReferralCodeResponse>('/api/referrals/code');
-}
-
-export interface Certificate {
-  id: string;
-  certificateId: string;
-  enrollmentId: string;
-  courseName: string;
-  studentName: string;
-  issueDate: string;
-  downloadUrl: string;
-  verifyUrl: string;
-}
-
-export interface CertificateResponse {
-  certificate: Certificate;
-}
-
-export async function getCertificate(enrollmentId: string): Promise<ApiResponse<CertificateResponse>> {
-  return fetchApi<CertificateResponse>(`/api/certificates/${enrollmentId}`);
-}
-
-export interface CertificateVerifyResponse {
-  valid: boolean;
-  certificate: Certificate | null;
-  message: string;
-}
-
-export async function verifyCertificate(certificateId: string): Promise<ApiResponse<CertificateVerifyResponse>> {
-  return fetchApi<CertificateVerifyResponse>(`/api/certificates/verify/${certificateId}`);
-}
-
-export interface Notification {
-  id: string;
-  type: 'enrollment' | 'quiz_passed' | 'certificate_issued' | 'referral_bonus' | 'withdrawal' | 'system';
-  title: string;
-  message: string;
-  read: boolean;
-  createdAt: string;
-  link: string | null;
-}
-
-export interface NotificationsResponse {
-  notifications: Notification[];
-  unreadCount: number;
-}
-
-export async function getNotifications(page?: number, limit?: number): Promise<ApiResponse<NotificationsResponse>> {
-  const searchParams = new URLSearchParams();
-  
-  if (page) searchParams.set('page', String(page));
-  if (limit) searchParams.set('limit', String(limit));
-
-  const query = searchParams.toString();
-  return fetchApi<NotificationsResponse>(`/api/notifications${query ? `?${query}` : ''}`);
-}
-
-export interface UnreadCountResponse {
-  unreadCount: number;
-}
-
-export async function getUnreadNotificationCount(): Promise<ApiResponse<UnreadCountResponse>> {
-  return fetchApi<UnreadCountResponse>('/api/notifications/unread-count');
-}
-
-export async function markNotificationRead(notificationId: string): Promise<ApiResponse<{ success: boolean }>> {
-  return fetchApi<{ success: boolean }>(`/api/notifications/${notificationId}/read`, {
-    method: 'POST',
-  });
-}
-
-export async function markAllNotificationsRead(): Promise<ApiResponse<{ success: boolean }>> {
-  return fetchApi<{ success: boolean }>('/api/notifications/read-all', {
-    method: 'POST',
-  });
 }
 
 export interface Submission {
@@ -451,6 +411,7 @@ export interface Submission {
   maxResubmissions: number;
   submittedAt: string;
   reviewCompletedAt: string | null;
+  adminNotes: string | null;
 }
 
 export interface SubmissionsResponse {
@@ -490,10 +451,12 @@ export async function createSubmission(request: CreateSubmissionRequest): Promis
 export interface AdminKPIs {
   totalUsers: number;
   totalEnrollments: number;
+  paidEnrollments: number;
+  totalCourses: number;
   revenueToday: number;
-  revenueThisWeek: number;
-  revenueThisMonth: number;
-  revenueAllTime: number;
+  revenueMonth: number;
+  newUsersToday: number;
+  newUsersMonth: number;
 }
 
 export interface AdminActionItems {
@@ -564,9 +527,12 @@ export interface AdminUser {
   email: string;
   phone: string | null;
   studyLevel: string | null;
-  createdAt: string;
   status: 'active' | 'suspended';
   emailVerified: boolean;
+  walletBalance: number;
+  enrollmentsCount: number;
+  submissionsCount: number;
+  createdAt: string;
 }
 
 export interface AdminUsersResponse {
@@ -627,6 +593,7 @@ export interface AdminCourse {
   modulesCount: number;
   enrollmentsCount: number;
   createdAt: string;
+  deletedAt: string | null;
 }
 
 export interface AdminCoursesResponse {
@@ -658,14 +625,35 @@ export async function createAdminCourse(data: Partial<AdminCourse>): Promise<Api
 }
 
 export async function updateAdminCourse(courseId: string, data: Partial<AdminCourse>): Promise<ApiResponse<{ course: AdminCourse }>> {
+  // Map form field names to API/schema field names
+  const apiData: Record<string, unknown> = { ...data };
+  if ('branch' in apiData) {
+    apiData.affiliatedBranch = apiData.branch;
+    delete apiData.branch;
+  }
+  if ('price' in apiData) {
+    apiData.coursePrice = apiData.price;
+    delete apiData.price;
+  }
   return fetchApi<{ course: AdminCourse }>(`/api/admin/courses/${courseId}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify(apiData),
   });
 }
 
-export async function toggleAdminCourseStatus(courseId: string): Promise<ApiResponse<{ success: boolean }>> {
-  return fetchApi<{ success: boolean }>(`/api/admin/courses/${courseId}/status`, { method: 'PATCH' });
+export async function toggleAdminCourseStatus(courseId: string, isActive: boolean): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/courses/${courseId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isActive }),
+  });
+}
+
+export async function deleteAdminCourse(courseId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/courses/${courseId}`, { method: 'DELETE' });
+}
+
+export async function restoreAdminCourse(courseId: string): Promise<ApiResponse<{ course: AdminCourse; message: string }>> {
+  return fetchApi<{ course: AdminCourse; message: string }>(`/api/admin/courses/${courseId}?action=restore`, { method: 'PATCH' });
 }
 
 // Admin Submissions
@@ -724,58 +712,6 @@ export async function rejectSubmission(submissionId: string, notes: string): Pro
   return fetchApi<{ success: boolean }>(`/api/admin/submissions/${submissionId}/reject`, {
     method: 'POST',
     body: JSON.stringify({ adminNotes: notes }),
-  });
-}
-
-// Admin Certificates
-export interface AdminCertificate {
-  id: string;
-  certificateId: string;
-  userName: string;
-  courseName: string;
-  grade: string;
-  status: 'valid' | 'revoked';
-  issuedAt: string;
-}
-
-export interface AdminCertificatesResponse {
-  certificates: AdminCertificate[];
-}
-
-export async function getAdminCertificates(params?: {
-  search?: string;
-  status?: 'valid' | 'revoked';
-  courseId?: string;
-  page?: number;
-  limit?: number;
-}): Promise<ApiResponse<AdminCertificatesResponse>> {
-  const searchParams = new URLSearchParams();
-  if (params?.search) searchParams.set('search', params.search);
-  if (params?.status) searchParams.set('status', params.status);
-  if (params?.courseId) searchParams.set('courseId', params.courseId);
-  if (params?.page) searchParams.set('page', String(params.page));
-  if (params?.limit) searchParams.set('limit', String(params.limit));
-  const query = searchParams.toString();
-  return fetchApi<AdminCertificatesResponse>(`/api/admin/certificates${query ? `?${query}` : ''}`);
-}
-
-export interface CertificateStats {
-  totalIssued: number;
-  validCount: number;
-  revokedCount: number;
-  distinctionCount: number;
-  firstClassCount: number;
-  passCount: number;
-}
-
-export async function getAdminCertificateStats(): Promise<ApiResponse<{ stats: CertificateStats }>> {
-  return fetchApi<{ stats: CertificateStats }>('/api/admin/certificates/stats');
-}
-
-export async function revokeCertificate(certificateId: string, reason: string): Promise<ApiResponse<{ success: boolean }>> {
-  return fetchApi<{ success: boolean }>(`/api/admin/certificates/${certificateId}/revoke`, {
-    method: 'POST',
-    body: JSON.stringify({ reason }),
   });
 }
 
@@ -865,8 +801,8 @@ export async function getAdminWithdrawalStats(): Promise<ApiResponse<{ stats: Wi
   return fetchApi<{ stats: WithdrawalStats }>('/api/admin/withdrawals/stats');
 }
 
-export async function processWithdrawal(withdrawalId: string): Promise<ApiResponse<{ success: boolean }>> {
-  return fetchApi<{ success: boolean }>(`/api/admin/withdrawals/${withdrawalId}/process`, { method: 'PATCH' });
+export async function processWithdrawal(withdrawalId: string): Promise<ApiResponse<{ success: boolean; upiId?: string | null }>> {
+  return fetchApi<{ success: boolean; upiId?: string | null }>(`/api/admin/withdrawals/${withdrawalId}/process`, { method: 'PATCH' });
 }
 
 export async function completeWithdrawal(withdrawalId: string, transactionId: string): Promise<ApiResponse<{ success: boolean }>> {
@@ -904,6 +840,27 @@ export interface AdminPromocodesResponse {
   promocodes: AdminPromocode[];
 }
 
+// Admin Certificates
+export interface AdminCertificate {
+  id: string;
+  certificateId: string;
+  studentName: string;
+  studentEmail: string;
+  courseName: string;
+  courseId: string;
+  branch: string | null;
+  issueDate: string;
+  enrolledAt: string;
+}
+
+export interface AdminCertificatesResponse {
+  certificates: AdminCertificate[];
+}
+
+export async function getAdminCertificates(): Promise<ApiResponse<AdminCertificatesResponse>> {
+  return fetchApi<AdminCertificatesResponse>('/api/admin/certificates');
+}
+
 export async function getAdminPromocodes(params?: {
   search?: string;
   status?: 'active' | 'inactive' | 'expired';
@@ -936,3 +893,247 @@ export async function updateAdminPromocode(promocodeId: string, data: Partial<Ad
 export async function togglePromocodeStatus(promocodeId: string): Promise<ApiResponse<{ success: boolean }>> {
   return fetchApi<{ success: boolean }>(`/api/admin/promocodes/${promocodeId}/status`, { method: 'PATCH' });
 }
+
+// User Profile & Settings
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  emailVerified: string | null; // ISO date string when verified, null if not
+  avatarUrl: string | null;
+  dob: string | null;
+  studyLevel: string | null;
+  referralCode: string | null;
+  upiId?: string | null;
+}
+
+export async function getUserProfile(): Promise<ApiResponse<{ profile: UserProfile }>> {
+  return fetchApi<{ profile: UserProfile }>('/api/users/profile');
+}
+
+export async function updateUserProfile(data: {
+  name?: string;
+  phone?: string;
+  dob?: string;
+  studyLevel?: string;
+}): Promise<ApiResponse<{ profile: UserProfile }>> {
+  return fetchApi<{ profile: UserProfile }>('/api/users/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateUpi(upiId: string): Promise<ApiResponse<{ success: boolean; upiId: string }>> {
+  return fetchApi<{ success: boolean; upiId: string }>('/api/users/profile/upi', {
+    method: 'PUT',
+    body: JSON.stringify({ upiId }),
+  });
+}
+
+export interface UserSession {
+  id: string;
+  device: string;
+  ip: string;
+  lastActive: string;
+  isCurrent: boolean;
+}
+
+export async function getUserSessions(): Promise<ApiResponse<{ sessions: UserSession[] }>> {
+  return fetchApi<{ sessions: UserSession[] }>('/api/users/sessions');
+}
+
+export async function revokeSession(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/users/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ─── Admin User Sub-resources ──────────────────────────────────────────────
+
+export async function getAdminUserEnrollments(userId: string): Promise<ApiResponse<{ enrollments: any[] }>> {
+  return fetchApi<{ enrollments: any[] }>(`/api/admin/users/${userId}/enrollments`);
+}
+
+export async function getAdminUserSubmissions(userId: string): Promise<ApiResponse<{ submissions: any[] }>> {
+  return fetchApi<{ submissions: any[] }>(`/api/admin/users/${userId}/submissions`);
+}
+
+export async function getAdminUserReferrals(userId: string): Promise<ApiResponse<{ referrals: any[] }>> {
+  return fetchApi<{ referrals: any[] }>(`/api/admin/users/${userId}/referrals`);
+}
+
+export async function getAdminUserTransactions(userId: string): Promise<ApiResponse<{ transactions: any[] }>> {
+  return fetchApi<{ transactions: any[] }>(`/api/admin/users/${userId}/transactions`);
+}
+
+export async function adminManualEnroll(userId: string, courseId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/users/${userId}/manual-enroll`, {
+    method: 'POST',
+    body: JSON.stringify({ courseId }),
+  });
+}
+
+export async function adminResetUserPassword(userId: string): Promise<ApiResponse<{ success: boolean; temporaryPassword?: string }>> {
+  return fetchApi<{ success: boolean; temporaryPassword?: string }>(`/api/admin/users/${userId}/reset-password`, {
+    method: 'POST',
+  });
+}
+
+export async function adminRevokeUserSessions(userId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/users/${userId}/revoke-sessions`, {
+    method: 'DELETE',
+  });
+}
+
+// ─── Admin Course Detail & Modules ────────────────────────────────────────
+
+export interface AdminCourseDetail extends AdminCourse {
+  courseDescription: string;
+  courseThumbnail: string;
+  problemStatementText: string;
+  modules: AdminModule[];
+}
+
+export async function getAdminCourseDetail(courseId: string): Promise<ApiResponse<{ course: AdminCourseDetail }>> {
+  return fetchApi<{ course: AdminCourseDetail }>(`/api/admin/courses/${courseId}`);
+}
+
+export async function getAdminCourseStats(courseId: string): Promise<ApiResponse<{ stats: any }>> {
+  return fetchApi<{ stats: any }>(`/api/admin/courses/${courseId}/stats`);
+}
+
+export async function getAdminCourseEnrollments(courseId: string, params?: { page?: number; limit?: number }): Promise<ApiResponse<{ enrollments: any[] }>> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set('page', String(params.page));
+  if (params?.limit) q.set('limit', String(params.limit));
+  return fetchApi<{ enrollments: any[] }>(`/api/admin/courses/${courseId}/enrollments${q.toString() ? `?${q}` : ''}`);
+}
+
+export async function getAdminCourseModules(courseId: string): Promise<ApiResponse<{ modules: AdminModule[] }>> {
+  return fetchApi<{ modules: AdminModule[] }>(`/api/admin/courses/${courseId}/modules`);
+}
+
+export async function createAdminModule(courseId: string, data: Partial<AdminModule>): Promise<ApiResponse<{ module: AdminModule }>> {
+  return fetchApi<{ module: AdminModule }>(`/api/admin/courses/${courseId}/modules`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAdminModule(courseId: string, moduleId: string, data: Partial<AdminModule>): Promise<ApiResponse<{ module: AdminModule }>> {
+  return fetchApi<{ module: AdminModule }>(`/api/admin/courses/${courseId}/modules/${moduleId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteAdminModule(courseId: string, moduleId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/courses/${courseId}/modules/${moduleId}`, {
+    method: 'DELETE',
+  });
+}
+
+export interface AdminModule {
+  id: string;
+  courseId: string;
+  dayNumber: number;
+  title: string;
+  contentText: string;
+  youtubeUrl: string | null;
+  notesPdfUrl: string | null;
+  isFreePreview: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getAdminModuleDetail(courseId: string, moduleId: string): Promise<ApiResponse<AdminModule>> {
+  return fetchApi<AdminModule>(`/api/admin/courses/${courseId}/modules/${moduleId}`);
+}
+
+export interface AdminQuizQuestion {
+  id?: string;
+  question: string;
+  options: { text: string; isCorrect: boolean }[];
+}
+
+export interface QuizQuestionFromApi {
+  id?: string;
+  questionText: string;
+  options: string[];
+  correctOptionIndex: number;
+}
+
+export async function getAdminModuleQuiz(courseId: string, moduleId: string): Promise<ApiResponse<QuizQuestionFromApi[]>> {
+  return fetchApi<QuizQuestionFromApi[]>(`/api/admin/courses/${courseId}/modules/${moduleId}/quiz`);
+}
+
+export async function replaceAdminModuleQuiz(courseId: string, moduleId: string, questions: AdminQuizQuestion[]): Promise<ApiResponse<QuizQuestionFromApi[]>> {
+  return fetchApi<QuizQuestionFromApi[]>(`/api/admin/courses/${courseId}/modules/${moduleId}/quiz`, {
+    method: 'PUT',
+    body: JSON.stringify({ questions }),
+  });
+}
+
+export async function duplicateAdminCourse(courseId: string): Promise<ApiResponse<{ course: AdminCourse }>> {
+  return fetchApi<{ course: AdminCourse }>(`/api/admin/courses/${courseId}/duplicate`, { method: 'POST' });
+}
+
+// ─── Admin Promocodes ───────────────────────────────────────────────────────
+
+export async function deleteAdminPromocode(promocodeId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/promocodes/${promocodeId}`, { method: 'DELETE' });
+}
+
+export async function getAdminPromocodeUsage(promocodeId: string): Promise<ApiResponse<{ usage: any[] }>> {
+  return fetchApi<{ usage: any[] }>(`/api/admin/promocodes/${promocodeId}/usage`);
+}
+
+// ─── Admin Accounts (Super Admin) ─────────────────────────────────────────
+
+export interface AdminAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'reviewer' | 'super_admin';
+  isActive: boolean;
+  createdAt: string;
+  lastActivity: string | null;
+}
+
+export async function getAdminAccounts(): Promise<ApiResponse<{ admins: AdminAccount[] }>> {
+  return fetchApi<{ admins: AdminAccount[] }>('/api/admin/admins');
+}
+
+export async function createAdminAccount(data: { name: string; email: string; role: string; password: string }): Promise<ApiResponse<{ admin: AdminAccount }>> {
+  return fetchApi<{ admin: AdminAccount }>('/api/admin/admins', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAdminAccount(adminId: string, data: Partial<AdminAccount>): Promise<ApiResponse<{ admin: AdminAccount }>> {
+  return fetchApi<{ admin: AdminAccount }>(`/api/admin/admins/${adminId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateAdminAccount(adminId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/admins/${adminId}/deactivate`, { method: 'PATCH' });
+}
+
+export async function activateAdminAccount(adminId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/admins/${adminId}/activate`, { method: 'PATCH' });
+}
+
+export async function resetAdminAccountPassword(adminId: string): Promise<ApiResponse<{ success: boolean; temporaryPassword?: string }>> {
+  return fetchApi<{ success: boolean; temporaryPassword?: string }>(`/api/admin/admins/${adminId}/reset-password`, { method: 'POST' });
+}
+
+export async function deleteAdminAccount(adminId: string): Promise<ApiResponse<{ success: boolean }>> {
+  return fetchApi<{ success: boolean }>(`/api/admin/admins/${adminId}`, { method: 'DELETE' });
+}
+
+
+

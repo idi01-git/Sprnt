@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { getDayContent, fetchApi, DayContent } from '@/lib/api';
-import VideoPlayer from '@/components/video/VideoPlayer';
+import { VideoPlayer } from '@/components/video/VideoPlayer';
 
 const poppins: React.CSSProperties = { fontFamily: "'Poppins', sans-serif" };
 const outfit: React.CSSProperties = { fontFamily: "'Outfit', sans-serif" };
@@ -41,13 +41,11 @@ export default function LearnDayPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [videoProgress, setVideoProgress] = useState(0);
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
-  const navigateDay = useCallback((d: number) => {
+  const navigateDay = (d: number) => {
     router.push(`/learn/${enrollmentId}/day/${d}`);
     setSidebarOpen(false);
-  }, [router, enrollmentId]);
+  };
 
   useEffect(() => {
     if (!enrollmentId || !dayNumber) return;
@@ -55,24 +53,11 @@ export default function LearnDayPage() {
     const fetchDay = async () => {
       setLoading(true);
       setError(null);
-      setSignedUrl(null);
       try {
         const response = await getDayContent(enrollmentId, dayNumber);
         if (response.success && response.data) {
           const dayData = response.data.day;
           setDay(dayData);
-
-          // Get signed video URL if videoId exists
-          if (dayData.videoId) {
-            const urlRes = await fetchApi<{ url: string; expiresAt: string }>(
-              `/api/video/${dayData.videoId}/signed-url`
-            );
-            if (urlRes.success && urlRes.data) {
-              setSignedUrl(urlRes.data.url);
-            }
-          } else if (dayData.videoUrl) {
-            setSignedUrl(dayData.videoUrl);
-          }
         } else {
           setError(response.error?.message || 'Failed to load day content');
         }
@@ -94,19 +79,7 @@ export default function LearnDayPage() {
     window.scrollTo(0, 0);
   }, [enrollmentId, dayNumber]);
 
-  const handleVideoProgress = useCallback(({ percent }: { currentTime: number; duration: number; percent: number }) => {
-    setVideoProgress(Math.round(percent));
-  }, []);
 
-  const handleVideoEnded = useCallback(async () => {
-    // Mark video as watched via API
-    if (day?.videoId) {
-      await fetchApi(`/api/video/${day.videoId}/progress`, {
-        method: 'POST',
-        body: JSON.stringify({ percent: 100, completed: true }),
-      });
-    }
-  }, [day]);
 
   if (loading) {
     return (
@@ -126,7 +99,7 @@ export default function LearnDayPage() {
           <AlertCircle className="w-12 h-12 text-red-400" />
           <h2 className="text-2xl font-bold text-gray-900" style={{ ...outfit, fontWeight: 800 }}>Can't Access This Day</h2>
           <p className="text-gray-500" style={{ ...poppins, fontSize: '15px' }}>{error || 'Content not found'}</p>
-          <Link href="/dashboard" className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg transition-all" style={{ ...poppins, fontWeight: 600 }}>
+          <Link href="/dashboard" className="px-6 py-3 rounded-xl bg-linear-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg transition-all" style={{ ...poppins, fontWeight: 600 }}>
             Back to Dashboard
           </Link>
         </div>
@@ -181,13 +154,13 @@ export default function LearnDayPage() {
                   onClick={() => !isLocked && navigateDay(d.dayNumber)}
                   disabled={isLocked}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${isCurrent
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md'
+                      ? 'bg-linear-to-r from-purple-600 to-blue-600 text-white shadow-md'
                       : isLocked
                         ? 'text-gray-300 cursor-not-allowed'
                         : 'text-gray-700 hover:bg-purple-50 hover:text-purple-700'
                     }`}
                 >
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? 'bg-white/20 text-white'
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isCurrent ? 'bg-white/20 text-white'
                       : d.isCompleted ? 'bg-green-100 text-green-600'
                         : isLocked ? 'bg-gray-100 text-gray-300'
                           : 'bg-purple-100 text-purple-600'
@@ -230,7 +203,7 @@ export default function LearnDayPage() {
       <div className="flex-1 lg:ml-64 min-w-0">
 
         {/* Top Banner */}
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white">
+        <div className="bg-linear-to-r from-purple-600 to-blue-600 text-white">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex items-center gap-4">
             {/* Mobile menu toggle */}
             <button
@@ -245,13 +218,10 @@ export default function LearnDayPage() {
                 <span className="px-3 py-1 rounded-full bg-white/20 text-sm" style={{ ...poppins, fontWeight: 600 }}>
                   Day {day.dayNumber} of 7
                 </span>
-                {day.quizPassed && (
+                {day.quiz.passed && (
                   <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-green-400/30 text-sm" style={{ ...poppins, fontWeight: 600 }}>
                     <CheckCircle2 className="w-3.5 h-3.5" /> Quiz Passed
                   </span>
-                )}
-                {videoProgress > 0 && videoProgress < 100 && (
-                  <span className="text-white/70 text-sm" style={poppins}>{videoProgress}% watched</span>
                 )}
               </div>
               <h1 style={{ ...outfit, fontWeight: 800, fontSize: 'clamp(20px, 3.5vw, 30px)' }}>
@@ -263,23 +233,7 @@ export default function LearnDayPage() {
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 mt-6 space-y-6 pb-16">
           {/* Video Player */}
-          {signedUrl ? (
-            <div className="rounded-2xl overflow-hidden shadow-lg">
-              <VideoPlayer
-                src={signedUrl}
-                title={day.title}
-                onProgress={handleVideoProgress}
-                onEnded={handleVideoEnded}
-              />
-            </div>
-          ) : day.videoUrl || day.videoId ? (
-            <div className="bg-gray-900 rounded-2xl aspect-video flex items-center justify-center">
-              <div className="text-center text-white/50">
-                <Loader2 className="w-10 h-10 mx-auto mb-2 animate-spin" />
-                <p className="text-sm" style={poppins}>Loading video…</p>
-              </div>
-            </div>
-          ) : null}
+          {day.videoUrl && <VideoPlayer videoUrl={day.videoUrl} title={day.title} />}
 
           {/* Lesson Content */}
           <div className="bg-white rounded-2xl p-6 md:p-8 border border-gray-100 shadow-sm">
@@ -323,7 +277,7 @@ export default function LearnDayPage() {
               <HelpCircle className="w-5 h-5 text-purple-600" /> Day {day.dayNumber} Quiz
             </h3>
 
-            {!day.isUnlocked ? (
+            {day.isLocked ? (
               <div className="flex flex-col items-center text-center py-6">
                 <Lock className="w-12 h-12 text-gray-300 mb-3" />
                 <p className="text-gray-600 font-semibold" style={poppins}>Complete Previous Day First</p>
@@ -331,13 +285,10 @@ export default function LearnDayPage() {
                   Pass the quiz for Day {day.dayNumber - 1} to unlock this content.
                 </p>
               </div>
-            ) : day.quizPassed ? (
+            ) : day.quiz.passed ? (
               <div className="flex flex-col items-center text-center py-6">
                 <CheckCircle2 className="w-12 h-12 text-green-500 mb-3" />
                 <p className="text-green-700 font-semibold" style={poppins}>Quiz Passed! 🎉</p>
-                {day.quizScore !== null && (
-                  <p className="text-sm text-gray-500 mt-1" style={poppins}>Your score: {day.quizScore}%</p>
-                )}
                 {dayNumber < 7 && (
                   <button
                     onClick={() => navigateDay(dayNumber + 1)}
@@ -350,7 +301,7 @@ export default function LearnDayPage() {
                 {dayNumber === 7 && (
                   <Link
                     href={`/dashboard/submit?enrollmentId=${enrollmentId}`}
-                    className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm hover:shadow-lg transition-all"
+                    className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-linear-to-r from-purple-600 to-blue-600 text-white text-sm hover:shadow-lg transition-all"
                     style={{ ...poppins, fontWeight: 600 }}
                   >
                     Submit Your Project <ArrowRight className="w-4 h-4" />
@@ -366,7 +317,7 @@ export default function LearnDayPage() {
                 </p>
                 <Link
                   href={`/quiz/${dayNumber}?enrollmentId=${enrollmentId}`}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg transition-all hover:scale-[1.02] active:scale-95"
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-linear-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg transition-all hover:scale-[1.02] active:scale-95"
                   style={{ ...poppins, fontWeight: 600 }}
                 >
                   <HelpCircle className="w-4 h-4" /> Start Quiz
@@ -389,9 +340,9 @@ export default function LearnDayPage() {
             {dayNumber < 7 && (
               <button
                 onClick={() => navigateDay(dayNumber + 1)}
-                disabled={!day.quizPassed && dayNumber < 7}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm transition-all ${day.quizPassed
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-md'
+                disabled={!day.quiz.passed && dayNumber < 7}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm transition-all ${day.quiz.passed
+                    ? 'bg-linear-to-r from-purple-600 to-blue-600 text-white hover:shadow-md'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   }`}
                 style={{ ...poppins, fontWeight: 600 }}

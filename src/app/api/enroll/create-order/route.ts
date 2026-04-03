@@ -47,6 +47,12 @@ export async function POST(request: NextRequest) {
             select: { id: true, courseId: true, courseName: true, coursePrice: true },
         })
 
+        // Fetch fresh user data for Razorpay prefill
+        const fullUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { name: true, email: true, phone: true },
+        })
+
         if (!course) {
             return createErrorResponse(
                 ErrorCode.COURSE_NOT_FOUND,
@@ -78,8 +84,15 @@ export async function POST(request: NextRequest) {
         let discountAmount = 0
         let promocodeUsed: string | null = null
 
+        console.info('[POST /api/enroll/create-order]', {
+            courseId,
+            promoCode,
+            coursePrice,
+        })
+
         // Validate promocode if provided
         if (promoCode) {
+            console.info('[POST /api/enroll/create-order] Promo code received, looking up:', promoCode);
             const promo = await prisma.promocode.findUnique({
                 where: { code: promoCode },
                 select: {
@@ -131,6 +144,13 @@ export async function POST(request: NextRequest) {
 
         const finalAmount = coursePrice - discountAmount
 
+        console.info('[POST /api/enroll/create-order] Final calculation', {
+            coursePrice,
+            discountAmount,
+            finalAmount,
+            promoCode,
+        })
+
         // Create or reuse pending enrollment
         const enrollment = existingEnrollment
             ? await prisma.enrollment.update({
@@ -156,6 +176,10 @@ export async function POST(request: NextRequest) {
             })
 
         // Create Razorpay order
+        console.info('[POST /api/enroll/create-order] Creating Razorpay order with:', {
+            finalAmount,
+            amountInPaise: Math.round(finalAmount * 100),
+        });
         const receipt = `enroll_${enrollment.id}`
         const order = await createOrder({
             amountInr: finalAmount,
@@ -184,6 +208,10 @@ export async function POST(request: NextRequest) {
             originalPrice: coursePrice,
             discountAmount,
             finalAmount,
+            // User data for Razorpay prefill
+            userName: fullUser?.name ?? null,
+            userEmail: fullUser?.email ?? null,
+            userPhone: fullUser?.phone ?? null,
         }, HttpStatus.CREATED)
     } catch (error) {
         if (error instanceof PaymentError) {

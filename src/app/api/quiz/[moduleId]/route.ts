@@ -11,22 +11,9 @@ import {
 } from '@/lib/api-response'
 
 /**
- * Quiz question structure stored in CourseModule.quizQuestions (JSON)
- * Expected format:
- * [
- *   { question: "...", options: ["A", "B", "C", "D"], correctAnswer: "B" },
- *   ...
- * ]
- */
-interface StoredQuestion {
-    question: string
-    options: string[]
-    correctAnswer: string
-}
-
-/**
  * GET /api/quiz/{moduleId}
  * Get quiz questions for a course module (strip correct answers).
+ * Questions fetched from quiz_questions table.
  * Query: ?enrollmentId=<enrollmentId>
  * Auth: Session Cookie
  */
@@ -64,7 +51,6 @@ export async function GET(
                 courseId: true,
                 dayNumber: true,
                 title: true,
-                quizQuestions: true,
             },
         })
 
@@ -76,7 +62,7 @@ export async function GET(
             )
         }
 
-        // Validate quiz prerequisites (enrollment, day unlocked, not already passed, not on cooldown)
+        // Validate quiz prerequisites
         const validation = await validateQuizPrerequisites(
             enrollmentId,
             courseModule.dayNumber
@@ -97,21 +83,31 @@ export async function GET(
             )
         }
 
-        // Strip correct answers from questions
-        const questions = (courseModule.quizQuestions as unknown as StoredQuestion[]).map(
-            (q, index) => ({
-                id: index + 1,
-                question: q.question,
-                options: q.options,
-            })
-        )
+        // Fetch questions from quiz_questions table
+        const quizQuestions = await prisma.quizQuestion.findMany({
+            where: { moduleId },
+            select: {
+                id: true,
+                questionText: true,
+                options: true,
+            },
+            orderBy: { orderIndex: 'asc' },
+        })
+
+        const questions = quizQuestions.map((q, index) => ({
+            id: index + 1,
+            question: q.questionText,
+            options: q.options as string[],
+        }))
 
         return createSuccessResponse({
-            moduleId: courseModule.id,
-            dayNumber: courseModule.dayNumber,
-            title: courseModule.title,
-            questions,
-            totalQuestions: questions.length,
+            quiz: {
+                moduleId: courseModule.id,
+                dayNumber: courseModule.dayNumber,
+                title: courseModule.title,
+                questions,
+                totalQuestions: questions.length,
+            },
         })
     } catch (error) {
         console.error('[GET /api/quiz/[moduleId]]', error)

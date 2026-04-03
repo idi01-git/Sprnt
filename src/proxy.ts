@@ -31,6 +31,8 @@ export async function proxy(request: NextRequest) {
         '/courses',
         '/login',
         '/register',
+        '/verify-email',
+        '/reset-password',
         '/admin/login',
     ]
 
@@ -39,6 +41,13 @@ export async function proxy(request: NextRequest) {
         path.startsWith('/_next') ||
         path.startsWith('/api/public') ||
         path.startsWith('/api/admin/auth/login') ||
+        path.startsWith('/api/auth/register') ||
+        path.startsWith('/api/auth/login') ||
+        path.startsWith('/api/auth/google') ||
+        path.startsWith('/api/auth/forgot-password') ||
+        path.startsWith('/api/auth/reset-password') ||
+        path.startsWith('/api/auth/verify-email') ||
+        path.startsWith('/api/webhooks') ||
         path.match(/\.(ico|png|svg|jpg|jpeg|gif|webp)$/)
 
     if (isPublicRoute) {
@@ -103,8 +112,7 @@ export async function proxy(request: NextRequest) {
     const isProtectedPage =
         path.startsWith('/dashboard') ||
         path.startsWith('/learn') ||
-        path.startsWith('/profile') ||
-        path.startsWith('/certificate')
+        path.startsWith('/profile')
 
     // API routes that require student auth
     const isProtectedApi =
@@ -113,11 +121,8 @@ export async function proxy(request: NextRequest) {
         path.startsWith('/api/learn') ||
         path.startsWith('/api/quiz') ||
         path.startsWith('/api/submissions') ||
-        path.startsWith('/api/certificates') ||
         path.startsWith('/api/enroll') ||
-        path.startsWith('/api/video') ||
         path.startsWith('/api/wallet') ||
-        path.startsWith('/api/notifications') ||
         (path.startsWith('/api/referrals') && !path.startsWith('/api/referrals/validate'))
 
     if (isProtectedPage || isProtectedApi) {
@@ -139,13 +144,24 @@ async function handleAdminAuth(request: NextRequest) {
     const { prisma } = await import('@/lib/db')
 
     const path = request.nextUrl.pathname
+    const isApiRoute = path.startsWith('/api/')
+
+    // Helper: return 401 JSON for APIs, redirect for pages
+    function unauthorized401() {
+        if (isApiRoute) {
+            return NextResponse.json(
+                { success: false, data: null, error: { code: 'AUTH_REQUIRED', message: 'Authentication required' } },
+                { status: 401 },
+            )
+        }
+        return NextResponse.redirect(new URL('/admin/login', request.url))
+    }
 
     // Check for admin session cookie
     const adminSessionId = request.cookies.get('admin_session')?.value
 
     if (!adminSessionId) {
-        // No session, redirect to admin login
-        return NextResponse.redirect(new URL('/admin/login', request.url))
+        return unauthorized401()
     }
 
     // Validate admin session
@@ -155,13 +171,12 @@ async function handleAdminAuth(request: NextRequest) {
     })
 
     if (!adminSession || adminSession.expiresAt < new Date()) {
-        // Session expired or invalid
-        if (adminSession) {
-            await prisma.adminSession.delete({ where: { id: adminSessionId } })
+        // Session expired or invalid - clear cookie and redirect/json
+        // Don't delete from DB here - let background job handle cleanup or let session naturally expire
+        const response = unauthorized401()
+        if (!isApiRoute) {
+            response.cookies.delete('admin_session')
         }
-
-        const response = NextResponse.redirect(new URL('/admin/login', request.url))
-        response.cookies.delete('admin_session')
         return response
     }
 
@@ -169,7 +184,7 @@ async function handleAdminAuth(request: NextRequest) {
 
     // Check if admin is active
     if (!admin.isActive) {
-        return NextResponse.redirect(new URL('/admin/login', request.url))
+        return unauthorized401()
     }
 
     // Role-based route restrictions
@@ -241,11 +256,8 @@ async function handleStudentAuth(request: NextRequest) {
     })
 
     if (!session || session.expiresAt < new Date()) {
-        // Session expired or invalid
-        if (session) {
-            await prisma.session.delete({ where: { id: sessionId } })
-        }
-
+        // Session expired or invalid - clear cookie and return unauthorized
+        // Don't delete from DB here - let background job handle cleanup or let session naturally expire
         const response = unauthorized401()
         response.cookies.delete('sprintern_session')
         return response

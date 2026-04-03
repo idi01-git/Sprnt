@@ -34,7 +34,7 @@ export default function AdminReferralsPage() {
       ]);
 
       if (refsRes.success && refsRes.data) {
-        setReferrals(refsRes.data.referrals);
+        setReferrals(refsRes.data.referrals ?? []);
       }
       if (statsRes.success && statsRes.data) {
         setStats(statsRes.data.stats);

@@ -461,3 +461,27 @@
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* ===========================================
+   ADMIN PANEL — Force light mode text
+   Prevents OS dark mode from causing white-on-white text
+   =========================================== */
+
+/* Force all text in admin pages to be dark */
+[style*="color-scheme: light"] input,
+[style*="color-scheme: light"] select,
+[style*="color-scheme: light"] textarea {
+  color: #111827 !important;
+}
+
+[style*="color-scheme: light"] input::placeholder,
+[style*="color-scheme: light"] select::placeholder,
+[style*="color-scheme: light"] textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Ensure table and card text is readable */
+[style*="color-scheme: light"] td,
+[style*="color-scheme: light"] th {
+  color: inherit;
+}

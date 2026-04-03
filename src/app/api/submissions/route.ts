@@ -13,8 +13,13 @@ import {
 
 const createSubmissionSchema = z.object({
     enrollmentId: z.string().min(1),
-    projectFileUrl: z.string().url(),
-    reportPdfUrl: z.string().url(),
+    driveLink: z.string().url(),
+    fullName: z.string().min(1),
+    dob: z.string().optional().nullable(),
+    collegeName: z.string().min(1),
+    collegeIdLink: z.string().url(),
+    branch: z.string().min(1),
+    graduationYear: z.number().int(),
 })
 
 /**
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const { enrollmentId, projectFileUrl, reportPdfUrl } = result.data
+        const { enrollmentId, driveLink, fullName, dob, collegeName, collegeIdLink, branch, graduationYear } = result.data
 
         // Verify enrollment
         const enrollment = await prisma.enrollment.findUnique({
@@ -101,14 +106,19 @@ export async function POST(request: NextRequest) {
         const deadline = new Date()
         deadline.setDate(deadline.getDate() + deadlineDays)
 
-        // Create submission and first version in a transaction
+        // Create submission in a transaction
         const submission = await prisma.$transaction(async (tx) => {
             const sub = await tx.submission.create({
                 data: {
                     enrollmentId,
                     userId: user.id,
-                    projectFileUrl,
-                    reportPdfUrl,
+                    driveLink,
+                    fullName,
+                    dob: dob || null,
+                    collegeName,
+                    collegeIdLink,
+                    branch,
+                    graduationYear,
                     reviewStatus: 'pending',
                 },
                 select: {
@@ -116,16 +126,6 @@ export async function POST(request: NextRequest) {
                     enrollmentId: true,
                     reviewStatus: true,
                     submittedAt: true,
-                },
-            })
-
-            // Create version 1
-            await tx.submissionVersion.create({
-                data: {
-                    submissionId: sub.id,
-                    versionNumber: 1,
-                    projectFileUrl,
-                    reportPdfUrl,
                 },
             })
 
@@ -217,8 +217,8 @@ export async function GET(request: NextRequest) {
             finalGrade: s.finalGrade ? Number(s.finalGrade) : null,
             resubmissionCount: s.resubmissionCount,
             maxResubmissions: s.maxResubmissions,
-            submittedAt: s.submittedAt,
-            reviewCompletedAt: s.reviewCompletedAt,
+            submittedAt: s.submittedAt.toISOString(),
+            reviewCompletedAt: s.reviewCompletedAt?.toISOString() ?? null,
         }))
 
         return createPaginatedResponse(

@@ -47,13 +47,23 @@ export async function GET(_request: NextRequest) {
                 assignedAdmin: {
                     select: {
                         id: true,
-                        username: true,
+                        email: true,
                     },
                 },
             },
         })
 
-        return createSuccessResponse({ submissions })
+        return createSuccessResponse({
+            submissions: submissions.map((s) => ({
+                id: s.id,
+                userName: s.user.name,
+                courseName: s.enrollment.course.courseName,
+                status: s.reviewStatus,
+                createdAt: s.submittedAt,
+                userEmail: s.user.email,
+                assignedAdminEmail: s.assignedAdmin?.email || null,
+            })),
+        })
     } catch (error) {
         if (error instanceof AuthError) {
             return createErrorResponse(

@@ -1,6 +1,14 @@
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, createErrorResponse, createPaginatedResponse, badRequest, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
+import {
+    createSuccessResponse,
+    createErrorResponse,
+    badRequest,
+    serverError,
+    HttpStatus,
+    ErrorCode,
+} from '@/lib/api-response'
 import { adminUserListQuerySchema } from '@/lib/validations/admin'
 import type { Prisma, StudyLevel } from '@/generated/prisma/client'
 
@@ -52,14 +60,31 @@ export async function GET(request: Request) {
                 orderBy,
                 include: {
                     _count: {
-                        select: { enrollments: true, submissions: true, certificates: true }
+                        select: { enrollments: true, submissions: true }
                     }
                 }
             }),
             prisma.user.count({ where }),
         ])
 
-        return createPaginatedResponse(users, { total, page, pageSize: limit })
+        const items = users.map(u => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            studyLevel: u.studyLevel || null,
+            status: u.deletedAt !== null ? 'suspended' : 'active',
+            emailVerified: !!u.emailVerified,
+            walletBalance: Number(u.walletBalance),
+            enrollmentsCount: u._count.enrollments,
+            submissionsCount: u._count.submissions,
+            createdAt: u.createdAt.toISOString(),
+        }))
+
+        const totalPages = Math.ceil(total / limit)
+        const meta = { total, page, pageSize: limit, totalPages, hasNext: page < totalPages, hasPrev: page > 1 }
+
+        return NextResponse.json({ success: true, data: { users: items }, meta }, { status: HttpStatus.OK })
     } catch (error) {
         if (error instanceof AuthError) {
             return createErrorResponse(

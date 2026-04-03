@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, notFound, serverError, HttpStatus } from '@/lib/api-response'
+import { createSuccessResponse, createErrorResponse, notFound, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +27,7 @@ export async function GET(
         return createSuccessResponse(safeData)
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/withdrawals/[withdrawalId]]', error)
         return serverError()

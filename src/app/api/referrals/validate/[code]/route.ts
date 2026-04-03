@@ -31,7 +31,6 @@ export async function GET(
         const referrer = await prisma.user.findFirst({
             where: {
                 referralCode: code,
-                referralCodeActive: true,
                 deletedAt: null,
             },
             select: {

@@ -21,12 +21,21 @@ export async function PATCH(
         const updated = await prisma.withdrawalRequest.update({
             where: { id: withdrawalId },
             data: { status: 'processing', processedBy: adminId, processedAt: new Date() },
-            include: { user: { select: { name: true, email: true } } },
         })
 
         await logAdminAction(adminId, 'withdrawal_processing_started', 'withdrawal', withdrawalId)
 
-        return createSuccessResponse(updated)
+        const userUpiId = await prisma.user.findUnique({
+            where: { id: updated.userId },
+            select: { upiId: true },
+        })
+
+        return createSuccessResponse({
+            id: updated.id,
+            userId: updated.userId,
+            status: updated.status,
+            upiId: userUpiId?.upiId || null,
+        })
     } catch (error) {
         if (error instanceof AuthError) {
             return createErrorResponse(

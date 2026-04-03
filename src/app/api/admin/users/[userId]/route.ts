@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, notFound, serverError, HttpStatus } from '@/lib/api-response'
+import { createSuccessResponse, createErrorResponse, notFound, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +19,6 @@ export async function GET(
                     select: {
                         enrollments: true,
                         submissions: true,
-                        certificates: true,
                         referralsSent: true,
                     }
                 }
@@ -37,17 +36,25 @@ export async function GET(
         })
 
         const responseData = {
-            ...user,
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            dob: user.dob?.toISOString() || null,
+            studyLevel: user.studyLevel,
+            status: user.deletedAt !== null ? 'suspended' : 'active',
+            emailVerified: !!user.emailVerified,
+            createdAt: user.createdAt.toISOString(),
             referralStats: {
                 totalReferrals: referralStats._count,
                 totalEarned: referralStats._sum.amount ?? 0,
             }
         }
 
-        return createSuccessResponse(responseData)
+        return createSuccessResponse({ user: responseData })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/users/[userId]]', error)
         return serverError()

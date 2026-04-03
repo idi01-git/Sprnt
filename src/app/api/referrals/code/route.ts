@@ -12,6 +12,7 @@ import {
 /**
  * GET /api/referrals/code
  * Get the user's referral code. Generates one if not yet assigned.
+ * Only returns the code if user has at least one successful enrollment.
  * Auth: Session Cookie
  */
 export async function GET(_request: NextRequest) {
@@ -25,11 +26,28 @@ export async function GET(_request: NextRequest) {
             )
         }
 
+        // Check if user has at least one successful enrollment
+        const enrollmentCount = await prisma.enrollment.count({
+            where: {
+                userId: user.id,
+                paymentStatus: 'success',
+            },
+        })
+
+        // If no successful enrollments, don't show referral code yet
+        if (enrollmentCount === 0) {
+            return createSuccessResponse({
+                code: null,
+                isActive: false,
+                shareUrl: null,
+                reason: 'no_enrollment',
+            })
+        }
+
         let userData = await prisma.user.findUnique({
             where: { id: user.id },
             select: {
                 referralCode: true,
-                referralCodeActive: true,
             },
         })
 
@@ -49,7 +67,6 @@ export async function GET(_request: NextRequest) {
                 data: { referralCode: code },
                 select: {
                     referralCode: true,
-                    referralCodeActive: true,
                 },
             })
         }
@@ -59,8 +76,8 @@ export async function GET(_request: NextRequest) {
         const shareUrl = `${baseUrl}/register?ref=${userData.referralCode}`
 
         return createSuccessResponse({
-            referralCode: userData.referralCode,
-            isActive: userData.referralCodeActive,
+            code: userData.referralCode,
+            isActive: true,
             shareUrl,
         })
     } catch (error) {

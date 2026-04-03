@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { SessionProvider, useSession } from '@/contexts/SessionContext';
 import {
   BookOpen,
   Wallet,
@@ -77,7 +78,8 @@ function parseApiError(data: any, httpStatus: number): { message: string; fields
   return { message: friendlyMessages[code] ?? message, fields: fieldErrors };
 }
 
-function DashboardNavbar({ user, onLogout, onShowAuth, unreadCount }: { user: AuthedUser | null; onLogout: () => void; onShowAuth: (view: View) => void; unreadCount?: number }) {
+function DashboardNavbar({ onShowAuth }: { onShowAuth: (view: View) => void }) {
+  const { user, status, unreadCount } = useSession();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -94,9 +96,10 @@ function DashboardNavbar({ user, onLogout, onShowAuth, unreadCount }: { user: Au
   const navItems = [
     { href: '/dashboard', icon: BookOpen, label: 'My Courses' },
     { href: '/dashboard/submit', icon: FileCheck, label: 'Submissions' },
-    { href: '/dashboard/certificates', icon: Award, label: 'Certificates' },
+    // { href: '/dashboard/certificates', icon: Award, label: 'Certificates' },
     { href: '/dashboard/referrals', icon: Users, label: 'Refer & Earn' },
     { href: '/dashboard/wallet', icon: Wallet, label: 'Wallet' },
+    // { href: '/dashboard/profile', icon: User, label: 'Profile & Settings' },
   ];
 
   return (
@@ -137,7 +140,7 @@ function DashboardNavbar({ user, onLogout, onShowAuth, unreadCount }: { user: Au
                   onClick={() => setUserMenuOpen((o) => !o)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-purple-50 transition-all duration-200 group"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                   <span className="hidden sm:block text-gray-700 group-hover:text-purple-600 transition-colors text-sm max-w-[120px] truncate">
@@ -202,18 +205,33 @@ function DashboardNavbar({ user, onLogout, onShowAuth, unreadCount }: { user: Au
                       <FileCheck className="w-4 h-4" />
                       My Submissions
                     </Link>
+                    <Link
+                      href="/dashboard/profile"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                      style={{ fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      <User className="w-4 h-4" /> Profile & Settings
+                    </Link>
                     <div className="border-t border-gray-100 mt-1" />
-                    <Link href="/" onClick={(e) => { e.preventDefault(); setUserMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                    <button
+                      onClick={async () => {
+                        setUserMenuOpen(false);
+                        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+                        window.location.href = '/';
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
                       <LogOut className="w-4 h-4" />
                       Logout
-                    </Link>
+                    </button>
                   </div>
                 )}
               </div>
             ) : (
               <button
                 onClick={() => onShowAuth('login')}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg transition-all hover:scale-105"
+                className="px-5 py-2.5 rounded-xl bg-linear-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg transition-all hover:scale-105"
                 style={{ ...btnStyle, fontSize: '14px' }}
               >
                 LOGIN
@@ -351,7 +369,7 @@ function AuthModal({ show, onClose, view, setView, onLogin }: { show: boolean; o
     ) : null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-scale-up max-h-[92vh] overflow-y-auto">
         <div className="flex justify-end p-6 pb-0">
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-all">
@@ -419,7 +437,7 @@ function AuthModal({ show, onClose, view, setView, onLogin }: { show: boolean; o
               {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3"><p className="text-red-600 text-sm" style={inputStyle}>{error}</p></div>}
               {successMessage && <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3"><p className="text-green-700 text-sm font-semibold" style={inputStyle}>{successMessage}</p></div>}
 
-              <button onClick={handleLogin} disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60" style={btnStyle}>
+              <button onClick={handleLogin} disabled={isLoading} className="w-full bg-linear-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60" style={btnStyle}>
                 {isLoading ? 'LOGGING IN...' : 'LOGIN'}
               </button>
 
@@ -515,7 +533,7 @@ function AuthModal({ show, onClose, view, setView, onLogin }: { show: boolean; o
               {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3"><p className="text-red-600 text-sm" style={inputStyle}>{error}</p></div>}
               {successMessage && <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3"><p className="text-green-700 text-sm font-semibold" style={inputStyle}>{successMessage}</p></div>}
 
-              <button onClick={handleSignUp} disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60" style={btnStyle}>
+              <button onClick={handleSignUp} disabled={isLoading} className="w-full bg-linear-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60" style={btnStyle}>
                 {isLoading ? 'CREATING...' : 'CREATE ACCOUNT'}
               </button>
 
@@ -547,7 +565,7 @@ function AuthModal({ show, onClose, view, setView, onLogin }: { show: boolean; o
               {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3"><p className="text-red-600 text-sm" style={inputStyle}>{error}</p></div>}
               {successMessage && <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3"><p className="text-green-700 text-sm font-semibold" style={inputStyle}>{successMessage}</p></div>}
 
-              <button onClick={handleForgotPassword} disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-60" style={btnStyle}>
+              <button onClick={handleForgotPassword} disabled={isLoading} className="w-full bg-linear-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-60" style={btnStyle}>
                 {isLoading ? 'SENDING...' : 'SEND RESET LINK'}
               </button>
 
@@ -562,77 +580,64 @@ function AuthModal({ show, onClose, view, setView, onLogin }: { show: boolean; o
   );
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [authedUser, setAuthedUser] = useState<AuthedUser | null>(null);
+/** Inner layout — consumes the Session context */
+function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
+  const { user, status, refresh } = useSession();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authView, setAuthView] = useState<View>('login');
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const pathname = usePathname();
-
-  useEffect(() => {
-    const fetchSessionAndNotifications = async () => {
-      setIsLoading(true);
-      try {
-        const sessionRes = await fetch('/api/auth/session', { credentials: 'include' });
-        const sessionData = await sessionRes.json().catch(() => null);
-
-        if (sessionData?.success && sessionData?.data?.user) {
-          setAuthedUser(sessionData.data.user);
-
-          const notifRes = await fetch('/api/notifications/unread-count', { credentials: 'include' });
-          const notifData = await notifRes.json().catch(() => null);
-          if (notifData?.success) {
-            setUnreadCount(notifData.data.unreadCount);
-          }
-        } else {
-          setAuthedUser(null);
-        }
-      } catch (err) {
-        console.error('Failed to fetch session:', err);
-        setAuthedUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSessionAndNotifications();
-  }, [pathname]);
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => { });
-    setAuthedUser(null);
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
     window.location.href = '/';
   };
 
   const handleLoginSuccess = () => {
-    window.location.reload();
+    refresh();
+    setShowAuthModal(false);
   };
 
-  // If still loading, show a blank screen (avoids flash)
-  if (isLoading) {
+  // Show a lean full-page skeleton while loading (only on first load)
+  if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-gray-50">
+        {/* Skeleton navbar */}
+        <div className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl shadow-lg shadow-purple-500/10">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="h-10 w-32 bg-gray-200 animate-pulse rounded-lg" />
+            <div className="hidden md:flex gap-2">
+              {[...Array(4)].map((_, i) => <div key={i} className="h-9 w-24 bg-gray-100 animate-pulse rounded-xl" />)}
+            </div>
+            <div className="h-9 w-9 bg-gray-200 animate-pulse rounded-full" />
+          </div>
+        </div>
+        {/* Page content placeholder */}
+        <div className="pt-28 px-6 max-w-5xl mx-auto">
+          <div className="h-8 w-48 bg-gray-200 animate-pulse rounded-lg mb-8" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm animate-pulse">
+                <div className="w-12 h-12 rounded-xl bg-gray-200 mb-4" />
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                <div className="h-3 bg-gray-100 rounded w-1/2 mb-4" />
+                <div className="h-2 bg-gray-100 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
-  // If not authenticated, redirect to home (landing page)
-  if (!authedUser) {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/';
-    }
+  // Unauthenticated — redirect to landing page
+  if (status === 'unauthenticated') {
+    if (typeof window !== 'undefined') window.location.href = '/';
     return null;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardNavbar
-        user={authedUser}
-        onLogout={handleLogout}
         onShowAuth={(v) => { setAuthView(v); setShowAuthModal(true); }}
-        unreadCount={unreadCount}
       />
 
       <main className="pt-24 pb-16">
@@ -647,5 +652,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         onLogin={handleLoginSuccess}
       />
     </div>
+  );
+}
+
+/** Root export — wraps with SessionProvider so all children have session access */
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </SessionProvider>
   );
 }

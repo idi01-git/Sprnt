@@ -6,34 +6,24 @@ import {
 } from '@/lib/auth/guards'
 import {
     createSuccessResponse,
+    createErrorResponse,
     badRequest,
     notFound,
     conflict,
     serverError,
     HttpStatus,
+    ErrorCode,
 } from '@/lib/api-response'
 import { adminUpdateModuleSchema } from '@/lib/validations/admin'
-import { deleteFile, Bucket } from '@/lib/r2'
-
-// =============================================================================
-// Helper: Find module by ID + Course context
-// =============================================================================
 
 async function findModule(courseId: string, moduleId: string) {
     return prisma.courseModule.findFirst({
         where: {
             id: moduleId,
-            course: { courseId }, // Ensure module belongs to this course
-        },
-        include: {
-            videoAssets: true,
+            course: { courseId },
         },
     })
 }
-
-// =============================================================================
-// GET /api/admin/courses/[courseId]/modules/[moduleId] — Module detail
-// =============================================================================
 
 export async function GET(
     _request: Request,
@@ -46,19 +36,19 @@ export async function GET(
         const module = await findModule(courseId, moduleId)
         if (!module) return notFound('Module')
 
-        return createSuccessResponse(module)
+        return createSuccessResponse({
+            ...module,
+            createdAt: module.createdAt.toISOString(),
+            updatedAt: module.updatedAt.toISOString(),
+        })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/courses/[courseId]/modules/[moduleId]]', error)
         return serverError()
     }
 }
-
-// =============================================================================
-// PUT /api/admin/courses/[courseId]/modules/[moduleId] — Update module
-// =============================================================================
 
 export async function PUT(
     request: Request,
@@ -83,7 +73,6 @@ export async function PUT(
 
         const data = parsed.data
 
-        // If day number changes, check for collision
         if (data.dayNumber && data.dayNumber !== module.dayNumber) {
             const collision = await prisma.courseModule.findFirst({
                 where: {
@@ -103,22 +92,26 @@ export async function PUT(
                 title: data.title,
                 contentText: data.contentText,
                 isFreePreview: data.isFreePreview,
+                youtubeUrl: data.youtubeUrl,
+                notesPdfUrl: data.notesPdfUrl,
             },
         })
 
-        return createSuccessResponse(updated)
+        return createSuccessResponse({
+            module: {
+                ...updated,
+                createdAt: updated.createdAt.toISOString(),
+                updatedAt: updated.updatedAt.toISOString(),
+            },
+        })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[PUT /api/admin/courses/[courseId]/modules/[moduleId]]', error)
         return serverError()
     }
 }
-
-// =============================================================================
-// DELETE /api/admin/courses/[courseId]/modules/[moduleId] — Delete module
-// =============================================================================
 
 export async function DELETE(
     _request: Request,
@@ -131,11 +124,9 @@ export async function DELETE(
         const module = await findModule(courseId, moduleId)
         if (!module) return notFound('Module')
 
-        // Check for student progress
         const usageCount = await prisma.dailyProgress.count({
             where: {
-                enrollment: { courseId: module.courseId }, // Filter by course + dayNumber?
-                // Wait, DailyProgress links to Enrollment (which links to Course) + dayNumber
+                enrollment: { courseId: module.courseId },
                 dayNumber: module.dayNumber,
             },
         })
@@ -146,34 +137,14 @@ export async function DELETE(
             )
         }
 
-        // Clean up assets (videos, notes) from R2
-        // We do this in a background promise or inline? Inline for safety.
-        if (module.notesPdfUrl) {
-            try {
-                const urlObj = new URL(module.notesPdfUrl)
-                const key = urlObj.pathname.slice(1)
-                await deleteFile(Bucket.PUBLIC, key)
-            } catch (e) {
-                console.warn('Failed to delete notes PDF:', e)
-            }
-        }
-
-        for (const video of module.videoAssets) {
-            if (video.r2Key) {
-                // If it's a private bucket/video, we might need logic, but for now assuming public/private match
-                // R2 implementation handles errors gracefully
-                await deleteFile(video.r2Bucket || Bucket.PUBLIC, video.r2Key)
-            }
-        }
-
         await prisma.courseModule.delete({
             where: { id: moduleId },
         })
 
-        return createSuccessResponse({ message: 'Module deleted' })
+        return createSuccessResponse({ success: true })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error(
             '[DELETE /api/admin/courses/[courseId]/modules/[moduleId]]',

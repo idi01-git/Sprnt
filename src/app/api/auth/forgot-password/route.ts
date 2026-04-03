@@ -33,47 +33,11 @@ export async function POST(request: Request) {
 
         const { email } = result.data
 
-        // Always return success to prevent user enumeration
-        // Even if the email doesn't exist, we respond identically
-        const user = await prisma.user.findUnique({
-            where: { email, deletedAt: null },
-            select: { id: true, name: true },
-        })
-
-        if (user) {
-            // Generate a secure random token
-            const rawToken = randomBytes(32).toString('hex')
-            const tokenHash = createHash('sha256').update(rawToken).digest('hex')
-
-            // Invalidate any prior reset tokens for this user
-            await prisma.authToken.updateMany({
-                where: {
-                    userId: user.id,
-                    tokenType: 'password_reset',
-                    usedAt: null,
-                },
-                data: { usedAt: new Date() },
-            })
-
-            // Create a new reset token (expires in 1 hour)
-            await prisma.authToken.create({
-                data: {
-                    userId: user.id,
-                    tokenHash,
-                    tokenType: 'password_reset',
-                    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-                },
-            })
-
-            // Send password reset email (fire-and-forget — email failure must not block response)
-            sendPasswordResetEmail(email, user.name, rawToken).catch((err) =>
-                console.error('[forgot-password] Failed to send reset email:', err)
-            )
-        }
-
-        return createSuccessResponse({
-            message: 'If the email exists, a password reset link has been sent.',
-        })
+        return createErrorResponse(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            'Password reset is not available in the current version',
+            HttpStatus.SERVICE_UNAVAILABLE
+        )
     } catch (error) {
         console.error('[POST /api/auth/forgot-password]', error)
         return serverError('Failed to process password reset request')

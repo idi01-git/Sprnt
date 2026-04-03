@@ -45,9 +45,7 @@ export async function GET(
                 coursePrice: true,
                 courseThumbnail: true,
                 courseDescription: true,
-                courseTranscriptUrl: true,
                 problemStatementText: true,
-                problemStatementPdfUrl: true,
                 tags: true,
                 createdAt: true,
                 updatedAt: true,
@@ -63,7 +61,13 @@ export async function GET(
             )
         }
 
-        return createSuccessResponse({ course })
+        // Convert Decimal fields to numbers for JSON serialization
+        const courseWithNumbers = {
+            ...course,
+            coursePrice: Number(course.coursePrice),
+        }
+
+        return createSuccessResponse({ course: courseWithNumbers })
     } catch (error) {
         console.error('[GET /api/courses/[slug]]', error)
         return serverError('Failed to fetch course details')

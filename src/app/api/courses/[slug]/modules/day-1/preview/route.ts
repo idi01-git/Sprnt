@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getQuizConfig } from '@/lib/quiz'
 import {
     createSuccessResponse,
     createErrorResponse,
@@ -7,7 +8,18 @@ import {
     HttpStatus,
     ErrorCode,
 } from '@/lib/api-response'
-import { generatePresignedDownloadUrl, Bucket, Expiry } from '@/lib/r2'
+
+function extractYouTubeId(url: string | null): string | null {
+    if (!url) return null
+    const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    ]
+    for (const pattern of patterns) {
+        const match = url.match(pattern)
+        if (match) return match[1]
+    }
+    return null
+}
 
 export async function GET(
     _request: NextRequest,
@@ -42,17 +54,8 @@ export async function GET(
                 title: true,
                 contentText: true,
                 notesPdfUrl: true,
-                notesR2Key: true,
+                youtubeUrl: true,
                 isFreePreview: true,
-                videoAssets: {
-                    where: { uploadStatus: 'completed' },
-                    select: {
-                        id: true,
-                        durationSeconds: true,
-                        resolution: true,
-                    },
-                    take: 1,
-                },
             },
         })
 
@@ -64,38 +67,47 @@ export async function GET(
             )
         }
 
-        let notesUrl: string | null = null
-        let notesExpiresAt: Date | null = null
-        let hasNotes = false
+        // Fetch quiz questions for Day 1
+        const quizQuestions = await prisma.quizQuestion.findMany({
+            where: { moduleId: day1Module.id },
+            select: {
+                id: true,
+                questionText: true,
+                options: true,
+                correctOptionIndex: true,
+                orderIndex: true,
+            },
+            orderBy: { orderIndex: 'asc' },
+        })
 
-        if (day1Module.notesR2Key) {
-            hasNotes = true
-            const signedUrl = await generatePresignedDownloadUrl(
-                Bucket.PRIVATE,
-                day1Module.notesR2Key,
-                Expiry.DOWNLOAD
-            )
-            notesUrl = signedUrl.url
-            notesExpiresAt = signedUrl.expiresAt
-        } else if (day1Module.notesPdfUrl) {
-            hasNotes = true
-            notesUrl = day1Module.notesPdfUrl
-        }
+        // Get quiz config for pass percentage
+        const config = await getQuizConfig()
+        const passScore = Math.ceil(quizQuestions.length * (config.passPercentage / 100))
+
+        const youtubeVideoId = extractYouTubeId(day1Module.youtubeUrl)
 
         return createSuccessResponse({
-            module: {
+            day: {
                 id: day1Module.id,
                 dayNumber: day1Module.dayNumber,
                 title: day1Module.title,
-                contentText: day1Module.contentText,
-                isFreePreview: day1Module.isFreePreview,
-                video: day1Module.videoAssets[0] ?? null,
-                notes: hasNotes
+                description: day1Module.contentText,
+                videoUrl: youtubeVideoId ? `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?rel=0&modestbranding=1&iv_load_policy=3&fs=1` : null,
+                content: day1Module.contentText,
+                resources: day1Module.notesPdfUrl
+                    ? [{ title: 'Day 1 Notes', url: day1Module.notesPdfUrl }]
+                    : [],
+                quiz: quizQuestions.length > 0
                     ? {
-                          url: notesUrl,
-                          expiresAt: notesExpiresAt,
-                          isSecure: !!day1Module.notesR2Key,
-                      }
+                        questions: quizQuestions.map((q, idx) => ({
+                            id: idx + 1,
+                            question: q.questionText,
+                            options: q.options as string[],
+                            correctOptionIndex: q.correctOptionIndex,
+                        })),
+                        passingScore: passScore,
+                        totalQuestions: quizQuestions.length,
+                    }
                     : null,
             },
         })

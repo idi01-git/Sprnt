@@ -107,13 +107,19 @@ export async function GET(request: NextRequest) {
             prisma.course.count({ where }),
         ])
 
+        // Convert Decimal fields to numbers for JSON serialization
+        const coursesWithNumbers = courses.map(course => ({
+            ...course,
+            coursePrice: Number(course.coursePrice),
+        }))
+
         // Cache the result (only for non-search queries)
         if (!search) {
-            set(cacheKey, { courses, total }, CACHE_TTL.MEDIUM)
+            set(cacheKey, { courses: coursesWithNumbers, total }, CACHE_TTL.MEDIUM)
         }
 
         return createPaginatedResponse(
-            { courses },
+            { courses: coursesWithNumbers },
             { total, page, pageSize: limit }
         )
     } catch (error) {

@@ -131,7 +131,7 @@ export async function GET(
         return createSuccessResponse({
             enrollmentId: enrollment.id,
             currentDay: enrollment.currentDay,
-            progress: days,
+            days,
         })
     } catch (error) {
         console.error('[GET /api/enrollments/[enrollmentId]/progress]', error)

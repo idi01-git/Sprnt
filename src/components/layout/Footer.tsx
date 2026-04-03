@@ -39,7 +39,7 @@ const socialLinks = [
 
 export function Footer() {
   return (
-    <footer className="relative bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white overflow-hidden">
+    <footer className="relative bg-linear-to-br from-gray-900 via-purple-900 to-gray-900 text-white overflow-hidden">
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         <div
@@ -120,7 +120,7 @@ export function Footer() {
                       }}
                     >
                       {link.name}
-                      <span className="absolute bottom-0 left-0 w-0 h-px bg-gradient-to-r from-purple-500 to-blue-500 group-hover:w-full transition-all duration-300" />
+                      <span className="absolute bottom-0 left-0 w-0 h-px bg-linear-to-r from-purple-500 to-blue-500 group-hover:w-full transition-all duration-300" />
                     </a>
                   </li>
                 ))}
@@ -140,7 +140,7 @@ export function Footer() {
               key={index}
               className="flex items-center gap-4 transition-transform duration-200 hover:translate-x-1"
             >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-linear-to-br from-purple-600 to-blue-600 flex items-center justify-center shrink-0">
                 <contact.icon className="w-6 h-6 text-white" />
               </div>
               <div>

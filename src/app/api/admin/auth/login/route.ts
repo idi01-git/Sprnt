@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
             select: {
                 id: true,
                 email: true,
-                username: true,
                 passwordHash: true,
                 role: true,
                 isActive: true,
@@ -83,7 +82,6 @@ export async function POST(request: NextRequest) {
             admin: {
                 id: admin.id,
                 email: admin.email,
-                username: admin.username,
                 role: admin.role,
             },
             message: 'Login successful',

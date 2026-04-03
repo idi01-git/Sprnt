@@ -36,8 +36,7 @@ export async function GET(
                 id: true,
                 enrollmentId: true,
                 userId: true,
-                projectFileUrl: true,
-                reportPdfUrl: true,
+                driveLink: true,
                 reviewStatus: true,
                 metric1SimulationAccuracy: true,
                 metric2LogicMethodology: true,
@@ -62,16 +61,6 @@ export async function GET(
                             },
                         },
                     },
-                },
-                submissionVersions: {
-                    select: {
-                        id: true,
-                        versionNumber: true,
-                        projectFileUrl: true,
-                        reportPdfUrl: true,
-                        submittedAt: true,
-                    },
-                    orderBy: { versionNumber: 'desc' },
                 },
             },
         })
@@ -98,8 +87,7 @@ export async function GET(
                 enrollmentId: submission.enrollmentId,
                 courseName: submission.enrollment.course.courseName,
                 courseSlug: submission.enrollment.course.slug,
-                projectFileUrl: submission.projectFileUrl,
-                reportPdfUrl: submission.reportPdfUrl,
+                driveLink: submission.driveLink,
                 reviewStatus: submission.reviewStatus,
                 metrics: {
                     simulationAccuracy: submission.metric1SimulationAccuracy
@@ -125,7 +113,6 @@ export async function GET(
                 submittedAt: submission.submittedAt,
                 reviewStartedAt: submission.reviewStartedAt,
                 reviewCompletedAt: submission.reviewCompletedAt,
-                versions: submission.submissionVersions,
             },
         })
     } catch (error) {

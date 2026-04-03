@@ -43,29 +43,23 @@ export async function POST(request: Request) {
             return badRequest('Validation failed', { errors: parsed.error.flatten().fieldErrors })
         }
 
-        const [existingEmail, existingUsername] = await Promise.all([
-            prisma.admin.findUnique({ where: { email: parsed.data.email } }),
-            prisma.admin.findUnique({ where: { username: parsed.data.username } }),
-        ])
+        const existingEmail = await prisma.admin.findUnique({ where: { email: parsed.data.email } })
 
         if (existingEmail) return conflict('Email already exists')
-        if (existingUsername) return conflict('Username already exists')
 
         const passwordHash = await hash(parsed.data.password)
 
         const admin = await prisma.admin.create({
             data: {
-                username: parsed.data.username,
                 email: parsed.data.email,
                 passwordHash,
                 role: parsed.data.role,
-                permissions: parsed.data.permissions || {},
             }
         })
 
         const { passwordHash: _, ...safeAdmin } = admin
 
-        await logAdminAction(adminId, 'admin_account_created', 'admin', admin.id, { username: admin.username, role: admin.role })
+        await logAdminAction(adminId, 'admin_account_created', 'admin', admin.id, { email: admin.email, role: admin.role })
 
         return createSuccessResponse(safeAdmin, HttpStatus.CREATED)
     } catch (error) {

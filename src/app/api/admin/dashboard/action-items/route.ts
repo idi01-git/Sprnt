@@ -18,23 +18,18 @@ export async function GET(_request: NextRequest) {
     try {
         await requireAdmin()
 
-        const [
-            pendingSubmissions,
-            pendingWithdrawals,
-            pendingIdentityVerifications,
-        ] = await Promise.all([
+        const [pendingSubmissions, pendingWithdrawals] = await Promise.all([
             prisma.submission.count({ where: { reviewStatus: 'pending' } }),
             prisma.withdrawalRequest.count({ where: { status: 'pending' } }),
-            prisma.identityVerification.count({ where: { verificationStatus: 'pending' } }),
         ])
 
-        const totalPending = pendingSubmissions + pendingWithdrawals + pendingIdentityVerifications
+        const totalPending = pendingSubmissions + pendingWithdrawals
 
         return createSuccessResponse({
             actionItems: {
                 pendingSubmissions,
                 pendingWithdrawals,
-                pendingIdentityVerifications,
+                pendingIdentityVerifications: 0,
                 totalPending,
             },
         })

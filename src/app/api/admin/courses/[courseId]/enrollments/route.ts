@@ -41,6 +41,7 @@ export async function GET(
 
         const where: Prisma.EnrollmentWhereInput = {
             courseId: course.id, // Use internal ID for relation
+            deletedAt: null, // Only show non-deleted enrollments
         }
 
         if (status !== 'all') {
@@ -67,7 +68,22 @@ export async function GET(
             prisma.enrollment.count({ where }),
         ])
 
-        return createPaginatedResponse(enrollments, { total, page, pageSize: limit })
+        // Format enrollments to match what the admin UI expects
+        const formattedEnrollments = enrollments.map(e => ({
+            id: e.id,
+            userId: e.userId,
+            userName: e.user.name,
+            userEmail: e.user.email,
+            userPhone: e.user.phone,
+            status: e.completedAt ? 'completed' : e.paymentStatus === 'failed' ? 'failed' : 'in_progress',
+            paymentStatus: e.paymentStatus,
+            amountPaid: Number(e.amountPaid),
+            enrolledAt: e.enrolledAt.toISOString(),
+            completedAt: e.completedAt?.toISOString() ?? null,
+            currentDay: e.currentDay,
+        }))
+
+        return createPaginatedResponse({ enrollments: formattedEnrollments }, { total, page, pageSize: limit })
     } catch (error) {
         if (error instanceof AuthError) {
             return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)

@@ -34,31 +34,6 @@ export async function GET(request: NextRequest) {
         const startDate = new Date()
         startDate.setDate(startDate.getDate() - days)
 
-        // Try pre-computed analytics first
-        const analyticsData = await prisma.analyticsDaily.findMany({
-            where: { date: { gte: startDate } },
-            orderBy: { date: 'asc' },
-            select: {
-                date: true,
-                revenue: true,
-                refunds: true,
-                netRevenue: true,
-            },
-        })
-
-        if (analyticsData.length > 0) {
-            return createSuccessResponse({
-                chart: analyticsData.map((d) => ({
-                    date: d.date,
-                    revenue: Number(d.revenue),
-                    refunds: Number(d.refunds),
-                    netRevenue: Number(d.netRevenue),
-                })),
-                source: 'pre_computed',
-            })
-        }
-
-        // Fallback: raw aggregation from transactions
         const transactions = await prisma.transaction.groupBy({
             by: ['createdAt'],
             where: {

@@ -41,6 +41,7 @@ function ProcessModal({
 }) {
   const [step, setStep] = useState<ModalStep>('reveal');
   const [upiRevealed, setUpiRevealed] = useState(false);
+  const [withdrawalUpiId, setWithdrawalUpiId] = useState<string | null>(null);
   const [txId, setTxId] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -61,7 +62,14 @@ function ProcessModal({
     setLoading(true);
     try {
       const res = await processWithdrawal(withdrawal.id);
-      if (res.success) { setUpiRevealed(true); setStep('confirm'); onRefresh(); }
+      if (res.success && res.data) {
+        setUpiRevealed(true);
+        if (res.data.upiId) {
+          setWithdrawalUpiId(res.data.upiId);
+        }
+        setStep('confirm');
+        onRefresh();
+      }
       else setError(res.error?.message || 'Failed to process');
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
@@ -97,7 +105,7 @@ function ProcessModal({
               {step === 'reject_form' ? 'Reject Withdrawal' : 'Process Withdrawal'}
             </h2>
             <p className="text-sm text-gray-500 mt-0.5" style={poppins}>
-              {withdrawal.userName} · ₹{withdrawal.amount.toFixed(2)}
+              {withdrawal.userName} · ₹{Number(withdrawal.amount).toFixed(2)}
             </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
@@ -121,7 +129,7 @@ function ProcessModal({
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-gray-500 text-xs mb-0.5" style={poppins}>Amount</p>
-                  <p className="font-bold text-gray-900 text-lg" style={{ ...outfit, fontWeight: 800 }}>₹{withdrawal.amount.toFixed(2)}</p>
+                  <p className="font-bold text-gray-900 text-lg" style={{ ...outfit, fontWeight: 800 }}>₹{Number(withdrawal.amount).toFixed(2)}</p>
                 </div>
               </div>
               {error && <p className="text-red-600 text-sm" style={poppins}>{error}</p>}
@@ -142,11 +150,11 @@ function ProcessModal({
             <>
               {/* UPI Box */}
               <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                <p className="text-xs text-green-600 mb-1.5" style={poppins}>Transfer ₹{withdrawal.amount.toFixed(2)} to this UPI ID:</p>
+                <p className="text-xs text-green-600 mb-1.5" style={poppins}>Transfer ₹{Number(withdrawal.amount).toFixed(2)} to this UPI ID:</p>
                 <div className="flex items-center gap-3">
-                  <p className="font-bold text-green-900 text-lg font-mono flex-1" style={poppins}>{withdrawal.upiId || 'Not available'}</p>
-                  {withdrawal.upiId && (
-                    <button onClick={() => copy(withdrawal.upiId!)} className="p-2 rounded-lg bg-green-200/60 hover:bg-green-300 transition-colors">
+                  <p className="font-bold text-green-900 text-lg font-mono flex-1" style={poppins}>{withdrawalUpiId || withdrawal.upiId || 'Not available'}</p>
+                  {(withdrawalUpiId || withdrawal.upiId) && (
+                    <button onClick={() => copy((withdrawalUpiId || withdrawal.upiId)!)} className="p-2 rounded-lg bg-green-200/60 hover:bg-green-300 transition-colors">
                       {copied ? <CheckCircle2 className="w-4 h-4 text-green-700" /> : <Copy className="w-4 h-4 text-green-700" />}
                     </button>
                   )}
@@ -177,7 +185,7 @@ function ProcessModal({
                   className="mt-0.5 w-4 h-4 accent-purple-600 flex-shrink-0"
                 />
                 <span className="text-sm text-gray-700 leading-relaxed" style={poppins}>
-                  I confirm that ₹{withdrawal.amount.toFixed(2)} has been successfully transferred to the student's UPI ID and the transaction ID above is correct.
+                  I confirm that ₹{Number(withdrawal.amount).toFixed(2)} has been successfully transferred to the student's UPI ID and the transaction ID above is correct.
                 </span>
               </label>
 
@@ -278,11 +286,11 @@ export default function AdminWithdrawalsPage() {
   };
 
   const statCards = stats ? [
-    { label: 'Pending', value: stats.pendingCount, color: 'text-yellow-600' },
-    { label: 'Pending Amount', value: `₹${stats.pendingAmount.toFixed(0)}`, color: 'text-orange-600' },
-    { label: 'Processed Today', value: stats.processedToday, color: 'text-blue-600' },
-    { label: 'Amount Today', value: `₹${stats.processedAmountToday.toFixed(0)}`, color: 'text-green-600' },
-    { label: 'Total Processed', value: `₹${stats.totalProcessed.toFixed(0)}`, color: 'text-gray-900' },
+    { label: 'Pending', value: stats.pendingCount ?? 0, color: 'text-yellow-600' },
+    { label: 'Pending Amount', value: `₹${Number(stats.pendingAmount ?? 0).toFixed(0)}`, color: 'text-orange-600' },
+    { label: 'Processed Today', value: stats.processedToday ?? 0, color: 'text-blue-600' },
+    { label: 'Amount Today', value: `₹${Number(stats.processedAmountToday ?? 0).toFixed(0)}`, color: 'text-green-600' },
+    { label: 'Total Processed', value: `₹${Number(stats.totalProcessed ?? 0).toFixed(0)}`, color: 'text-gray-900' },
   ] : [];
 
   return (
@@ -365,7 +373,7 @@ export default function AdminWithdrawalsPage() {
                         <p className="text-xs text-gray-500" style={poppins}>{w.userEmail}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-bold text-gray-900" style={poppins}>₹{w.amount.toFixed(2)}</p>
+                        <p className="font-bold text-gray-900" style={poppins}>₹{Number(w.amount).toFixed(2)}</p>
                       </td>
                       <td className="px-6 py-4">
                         {w.status === 'processing' && w.upiId ? (

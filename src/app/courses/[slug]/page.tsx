@@ -3,8 +3,18 @@ import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { getCourseBySlug } from '@/lib/api';
+import { fetchApi } from '@/lib/api';
+import { validateRequest } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
 import { Clock, Award, Users, Sparkles, CheckCircle2, Play, FileText } from 'lucide-react';
 import BuyButton from '@/components/course/BuyButton';
+
+interface ModuleSummary {
+  id: string;
+  dayNumber: number;
+  title: string;
+  isFreePreview: boolean;
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -35,7 +45,36 @@ export default async function CourseDetailPage({
 
   const course = res.data.course;
   const tags = Array.isArray(course.tags) ? course.tags : [];
-  const moduleCount = course._count?.modules || 7;
+
+  // Fetch real modules for syllabus
+  const modulesRes = await fetchApi<{ modules: ModuleSummary[] }>(
+    `/api/courses/${slug}/modules`
+  );
+  const modules = modulesRes.success ? modulesRes.data?.modules ?? [] : [];
+  const moduleCount = modules.length || course._count?.modules || 7;
+
+  // Check if user is already enrolled
+  const { user } = await validateRequest();
+  let userEnrollment: { id: string; currentDay: number } | null = null;
+  if (user) {
+    // Get the internal course id from slug
+    const courseData = await prisma.course.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (courseData) {
+      const enrollment = await prisma.enrollment.findFirst({
+        where: {
+          userId: user.id,
+          courseId: courseData.id,
+          paymentStatus: 'success',
+          deletedAt: null,
+        },
+        select: { id: true, currentDay: true },
+      });
+      userEnrollment = enrollment;
+    }
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -71,7 +110,7 @@ export default async function CourseDetailPage({
                 <div className="flex flex-wrap gap-6 mb-8">
                   <div className="flex items-center gap-2 text-white">
                     <Clock className="w-5 h-5" />
-                    <span>7 Days</span>
+                    <span>{moduleCount} Days</span>
                   </div>
                   <div className="flex items-center gap-2 text-white">
                     <FileText className="w-5 h-5" />
@@ -90,7 +129,7 @@ export default async function CourseDetailPage({
                   </span>
                   {course.coursePrice < 500 && (
                     <span className="text-xl text-white/60 line-through">
-                      ₹{Math.round(course.coursePrice * 1.5)}
+                      ₹{Math.round(Number(course.coursePrice) * 1.5)}
                     </span>
                   )}
                 </div>
@@ -104,21 +143,39 @@ export default async function CourseDetailPage({
                   >
                     Try Day 1 for FREE
                   </Link>
-                  <BuyButton
-                    courseId={String(course.id)}
-                    courseName={course.courseName}
-                    coursePrice={course.coursePrice}
-                    slug={slug}
-                  />
+                  {userEnrollment ? (
+                    <Link
+                      href={`/learn/${userEnrollment.id}/day/${userEnrollment.currentDay}`}
+                      className="px-8 py-4 rounded-xl bg-green-500 text-white font-semibold hover:shadow-lg hover:shadow-green-500/30 transition-all hover:scale-105"
+                      style={{ fontFamily: 'var(--font-poppins)' }}
+                    >
+                      Continue Learning (Day {userEnrollment.currentDay})
+                    </Link>
+                  ) : (
+                    <BuyButton
+                      courseId={course.courseId}
+                      courseName={course.courseName}
+                      coursePrice={course.coursePrice}
+                      slug={slug}
+                    />
+                  )}
                 </div>
               </div>
 
               {/* Right - Preview Card */}
               <div className="hidden lg:block">
-                <div className="bg-white rounded-2xl p-6 shadow-xl">
-                  <div className="aspect-video bg-gradient-to-br from-purple-100 to-blue-100 rounded-xl flex items-center justify-center mb-4">
-                    <Play className="w-16 h-16 text-purple-600" />
-                  </div>
+                <div className="bg-white rounded-2xl p-6 shadow-xl overflow-hidden">
+                  {course.courseThumbnail ? (
+                    <img
+                      src={course.courseThumbnail}
+                      alt={course.courseName}
+                      className="w-full aspect-video object-cover rounded-xl mb-4"
+                    />
+                  ) : (
+                    <div className="aspect-video bg-gradient-to-br from-purple-100 to-blue-100 rounded-xl flex items-center justify-center mb-4">
+                      <Play className="w-16 h-16 text-purple-600" />
+                    </div>
+                  )}
                   <p className="text-center text-gray-600 font-medium">
                     Preview: Day 1 Content
                   </p>
@@ -180,42 +237,85 @@ export default async function CourseDetailPage({
                   Course Syllabus
                 </h2>
                 <div className="space-y-4">
-                  {Array.from({ length: moduleCount }, (_, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-center justify-between p-4 rounded-xl border ${i === 0
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-gray-200 bg-gray-50'
+                  {modules.length > 0 ? (
+                    modules.map((mod) => (
+                      <div
+                        key={mod.id}
+                        className={`flex items-center justify-between p-4 rounded-xl border ${
+                          mod.isFreePreview
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200 bg-gray-50'
                         }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${i === 0
-                            ? 'bg-green-500 text-white'
-                            : 'bg-gray-200 text-gray-600'
-                          }`}>
-                          {i + 1}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                              mod.isFreePreview
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}>
+                            {mod.dayNumber}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">{mod.title}</p>
+                            <p className="text-sm text-gray-500">
+                              {mod.isFreePreview ? 'Free to preview' : 'Available after enrollment'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">Day {i + 1}</p>
-                          <p className="text-sm text-gray-500">
-                            {i === 0 ? 'Free to preview' : 'Available after enrollment'}
-                          </p>
-                        </div>
+                        {mod.isFreePreview ? (
+                          <Link
+                            href={`/courses/${slug}/day-1`}
+                            className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition-colors"
+                          >
+                            Start Free
+                          </Link>
+                        ) : (
+                          <span className="px-4 py-2 rounded-lg bg-gray-200 text-gray-500 font-medium">
+                            🔒 Locked
+                          </span>
+                        )}
                       </div>
-                      {i === 0 ? (
-                        <Link
-                          href={`/courses/${slug}/day-1`}
-                          className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition-colors"
-                        >
-                          Start Free
-                        </Link>
-                      ) : (
-                        <span className="px-4 py-2 rounded-lg bg-gray-200 text-gray-500 font-medium">
-                          🔒 Locked
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    Array.from({ length: moduleCount }, (_, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center justify-between p-4 rounded-xl border ${
+                          i === 0
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200 bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                              i === 0
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}>
+                            {i + 1}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">Day {i + 1}</p>
+                            <p className="text-sm text-gray-500">
+                              {i === 0 ? 'Free to preview' : 'Available after enrollment'}
+                            </p>
+                          </div>
+                        </div>
+                        {i === 0 ? (
+                          <Link
+                            href={`/courses/${slug}/day-1`}
+                            className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition-colors"
+                          >
+                            Start Free
+                          </Link>
+                        ) : (
+                          <span className="px-4 py-2 rounded-lg bg-gray-200 text-gray-500 font-medium">
+                            🔒 Locked
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

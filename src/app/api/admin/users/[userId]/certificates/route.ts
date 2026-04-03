@@ -24,25 +24,31 @@ export async function GET(
         const { page, limit } = parsed.data
         const skip = (page - 1) * limit
 
-        const where = { userId }
+        const where = { userId, certificateIssued: true }
 
-        const [certificates, total] = await Promise.all([
-            prisma.certificate.findMany({
+        const [enrollments, total] = await Promise.all([
+            prisma.enrollment.findMany({
                 where,
                 skip,
                 take: limit,
-                orderBy: { issuedAt: 'desc' },
+                orderBy: { completedAt: 'desc' },
                 select: {
                     id: true,
                     certificateId: true,
-                    courseName: true,
-                    grade: true,
-                    isRevoked: true,
-                    issuedAt: true,
+                    courseId: true,
+                    course: { select: { courseName: true } },
+                    completedAt: true,
                 }
             }),
-            prisma.certificate.count({ where }),
+            prisma.enrollment.count({ where }),
         ])
+
+        const certificates = enrollments.map(e => ({
+            id: e.id,
+            certificateId: e.certificateId,
+            courseName: e.course.courseName,
+            issuedAt: e.completedAt,
+        }))
 
         return createPaginatedResponse(certificates, { total, page, pageSize: limit })
     } catch (error) {

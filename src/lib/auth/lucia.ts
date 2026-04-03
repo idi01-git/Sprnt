@@ -13,7 +13,12 @@ export const lucia = new Lucia(studentAdapter, {
         attributes: {
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
+            path: '/', // Ensure cookie is sent to all routes
         },
+    },
+    sessionExpiration: {
+        absolute: 30 * 24 * 60 * 60 * 1000, // 30 days absolute lifetime
+        idle: 24 * 60 * 60 * 1000, // 24 hours idle timeout
     },
     getUserAttributes: (attributes) => {
         return {
@@ -37,8 +42,12 @@ export const adminLucia = new Lucia(adminAdapter, {
         attributes: {
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            path: '/admin', // Scoped to admin routes only!
+            path: '/',
         },
+    },
+    sessionExpiration: {
+        absolute: 30 * 24 * 60 * 60 * 1000, // 30 days absolute lifetime
+        idle: 8 * 60 * 60 * 1000, // 8 hours idle timeout for admins
     },
     getUserAttributes: (attributes) => {
         return {

@@ -52,14 +52,6 @@ export async function POST(
                     reason: `Rejected: ${parsed.data.reason}`,
                 },
             }),
-            prisma.notification.create({
-                data: {
-                    userId: withdrawal.userId,
-                    type: 'withdrawal_rejected',
-                    title: 'Withdrawal Rejected',
-                    message: `Your withdrawal request was rejected. Reason: ${parsed.data.reason}. Your wallet balance has been refunded.`,
-                },
-            }),
         ])
 
         await logAdminAction(adminId, 'withdrawal_rejected', 'withdrawal', withdrawalId, { reason: parsed.data.reason })

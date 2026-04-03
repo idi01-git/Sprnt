@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, createPaginatedResponse, badRequest, serverError, HttpStatus } from '@/lib/api-response'
+import { createSuccessResponse, createErrorResponse, createPaginatedResponse, badRequest, serverError, HttpStatus } from '@/lib/api-response'
 import { adminWithdrawalListQuerySchema } from '@/lib/validations/admin'
 import type { Prisma } from '@/generated/prisma/client'
 
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
                     id: true,
                     userId: true,
                     amount: true,
+                    upiId: true,
                     status: true,
                     adminConfirmed: true,
                     requestedAt: true,
@@ -45,16 +46,27 @@ export async function GET(request: Request) {
                     rejectionReason: true,
                     transactionId: true,
                     user: { select: { name: true, email: true } },
-                    // upiId is intentionally NOT selected
                 }
             }),
             prisma.withdrawalRequest.count({ where }),
         ])
 
-        return createPaginatedResponse(withdrawals, { total, page, pageSize: limit })
+        const items = withdrawals.map(w => ({
+            id: w.id,
+            userId: w.userId,
+            userName: w.user.name,
+            userEmail: w.user.email,
+            amount: Number(w.amount),
+            status: w.status,
+            createdAt: w.requestedAt.toISOString(),
+            processedAt: w.processedAt?.toISOString() ?? null,
+            upiId: w.upiId,
+        }))
+
+        return createPaginatedResponse({ withdrawals: items }, { total, page, pageSize: limit })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse('ADMIN_AUTH_REQUIRED', 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/withdrawals]', error)
         return serverError()

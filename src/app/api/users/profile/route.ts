@@ -31,7 +31,6 @@ export async function GET() {
                 role: true,
                 referralCode: true,
                 emailVerified: true,
-                phoneVerified: true,
                 walletBalance: true,
                 upiId: true,
                 createdAt: true,

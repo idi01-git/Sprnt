@@ -1,9 +1,9 @@
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
 import {
     createSuccessResponse,
     createErrorResponse,
-    createPaginatedResponse,
     badRequest,
     serverError,
     HttpStatus,
@@ -13,7 +13,7 @@ import {
     adminCourseListQuerySchema,
     adminCreateCourseSchema,
 } from '@/lib/validations/admin'
-import { del, CACHE_KEYS } from '@/lib/cache'
+import { del, delPattern, CACHE_KEYS } from '@/lib/cache'
 import type { Prisma } from '@/generated/prisma/client'
 import crypto from 'crypto'
 
@@ -104,7 +104,30 @@ export async function GET(request: Request) {
             prisma.course.count({ where }),
         ])
 
-        return createPaginatedResponse(courses, { total, page, pageSize: limit })
+const items = courses.map(c => {
+            let tags: string[] = []
+            try { tags = typeof c.tags === 'string' ? JSON.parse(c.tags) : Array.isArray(c.tags) ? c.tags : [] }
+            catch { tags = [] }
+            return {
+                id: c.id,
+                courseId: c.courseId,
+                courseName: c.courseName,
+                slug: c.slug,
+                branch: c.affiliatedBranch,
+                price: Number(c.coursePrice),
+                isActive: c.isActive,
+                tags,
+                modulesCount: c._count.modules,
+                enrollmentsCount: c._count.enrollments,
+                createdAt: c.createdAt.toISOString(),
+                deletedAt: c.deletedAt?.toISOString() || null,
+            }
+        })
+
+        const totalPages = Math.ceil(total / limit)
+        const meta = { total, page, pageSize: limit, totalPages, hasNext: page < totalPages, hasPrev: page > 1 }
+
+        return NextResponse.json({ success: true, data: { courses: items }, meta }, { status: HttpStatus.OK })
     } catch (error) {
         if (error instanceof AuthError) {
             return createErrorResponse(
@@ -148,17 +171,29 @@ export async function POST(request: Request) {
                 courseThumbnail: data.courseThumbnail,
                 courseDescription: data.courseDescription,
                 problemStatementText: data.problemStatementText,
-                courseTranscriptUrl: data.courseTranscriptUrl ?? null,
-                problemStatementPdfUrl: data.problemStatementPdfUrl ?? null,
                 tags: data.tags,
                 isActive: data.isActive,
             },
         })
 
-        del(CACHE_KEYS.COURSES_LIST)
+        delPattern(CACHE_KEYS.COURSES_LIST)
         del(CACHE_KEYS.COURSES_BRANCHES)
 
-        return createSuccessResponse(course, HttpStatus.CREATED)
+        return createSuccessResponse({
+            course: {
+                id: course.id,
+                courseId: course.courseId,
+                courseName: course.courseName,
+                slug: course.slug,
+                branch: course.affiliatedBranch,
+                price: Number(course.coursePrice),
+                isActive: course.isActive,
+                tags: course.tags,
+                modulesCount: 0,
+                enrollmentsCount: 0,
+                createdAt: course.createdAt.toISOString(),
+            },
+        }, HttpStatus.CREATED)
     } catch (error) {
         if (error instanceof AuthError) {
             return createErrorResponse(

@@ -36,15 +36,17 @@ export async function GET(request: Request) {
         }))
 
         const conversionRate = totalReferrals > 0
-            ? ((completedReferrals / totalReferrals) * 100).toFixed(1)
-            : '0.0'
+            ? Number(((completedReferrals / totalReferrals) * 100).toFixed(1))
+            : 0
 
         return createSuccessResponse({
-            totalReferrals,
-            completedReferrals,
-            conversionRate,
-            totalPayouts: totalPayouts._sum.amount ?? 0,
-            topReferrers
+            stats: {
+                totalReferrals,
+                completedReferrals,
+                conversionRate,
+                totalPayouts: totalPayouts._sum.amount ?? 0,
+                topReferrers
+            }
         })
     } catch (error) {
         if (error instanceof AuthError) {

@@ -11,8 +11,7 @@ import {
 } from '@/lib/api-response'
 
 const resubmitSchema = z.object({
-    projectFileUrl: z.string().url(),
-    reportPdfUrl: z.string().url(),
+    driveLink: z.string().url(),
 })
 
 /**
@@ -47,7 +46,7 @@ export async function POST(
             )
         }
 
-        const { projectFileUrl, reportPdfUrl } = result.data
+        const { driveLink } = result.data
 
         // Get submission
         const submission = await prisma.submission.findUnique({
@@ -94,30 +93,16 @@ export async function POST(
             )
         }
 
-        // Update submission and create new version in transaction
+        // Update submission in transaction
         const updated = await prisma.$transaction(async (tx) => {
-            const newVersionNumber = submission.resubmissionCount + 2 // version 1 is original
-
-            // Create new version
-            await tx.submissionVersion.create({
-                data: {
-                    submissionId: submission.id,
-                    versionNumber: newVersionNumber,
-                    projectFileUrl,
-                    reportPdfUrl,
-                },
-            })
-
             // Update submission
             return tx.submission.update({
                 where: { id: submission.id },
                 data: {
-                    projectFileUrl,
-                    reportPdfUrl,
+                    driveLink,
                     reviewStatus: 'pending',
                     resubmissionCount: { increment: 1 },
                     submittedAt: new Date(),
-                    // Reset review fields
                     reviewStartedAt: null,
                     reviewCompletedAt: null,
                     adminNotes: null,

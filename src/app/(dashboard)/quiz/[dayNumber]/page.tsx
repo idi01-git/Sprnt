@@ -13,10 +13,24 @@ import {
   Award,
   ArrowRight
 } from 'lucide-react';
-import { fetchApi, Quiz, QuizResult, QuizResultResponse } from '@/lib/api';
+import { fetchApi } from '@/lib/api';
 
 const poppins: React.CSSProperties = { fontFamily: "'Poppins', sans-serif" };
 const outfit: React.CSSProperties = { fontFamily: "'Outfit', sans-serif" };
+
+interface QuizQuestion {
+  id: number;
+  question: string;
+  options: string[];
+}
+
+interface QuizData {
+  moduleId: string;
+  dayNumber: number;
+  title: string;
+  questions: QuizQuestion[];
+  totalQuestions: number;
+}
 
 interface QuizResultData {
   passed: boolean;
@@ -28,19 +42,6 @@ interface QuizResultData {
   dayNumber: number;
 }
 
-interface DayContent {
-  dayNumber: number;
-  title: string;
-  moduleId: string;
-  quiz: {
-    attempted: boolean;
-    passed: boolean;
-    attempts: number;
-    cooldownUntil: string | null;
-    cooldownActive: boolean;
-  };
-}
-
 export default function QuizPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -49,8 +50,8 @@ export default function QuizPage() {
   const dayNumber = parseInt(params.dayNumber as string, 10) || 1;
   const enrollmentId = searchParams.get('enrollmentId') || '';
 
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [quiz, setQuiz] = useState<QuizData | null>(null);
+  const [answers, setAnswers] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +65,8 @@ export default function QuizPage() {
       setLoading(true);
       setError(null);
       try {
-        const learnRes = await fetchApi<{ day: DayContent }>(
+        // First get moduleId from day content
+        const learnRes = await fetchApi<{ day: { moduleId: string; dayNumber: number; title: string } }>(
           `/api/learn/${enrollmentId}/day/${dayNumber}`
         );
 
@@ -74,8 +76,7 @@ export default function QuizPage() {
           return;
         }
 
-        const dayContent = learnRes.data.day;
-        const moduleId = dayContent.moduleId;
+        const { moduleId } = learnRes.data.day;
 
         if (!moduleId) {
           setError('Module not found for this day');
@@ -83,17 +84,19 @@ export default function QuizPage() {
           return;
         }
 
-        const quizRes = await fetchApi<{ quiz: Quiz }>(
+        // Fetch quiz questions
+        const quizRes = await fetchApi<{ quiz: QuizData }>(
           `/api/quiz/${moduleId}?enrollmentId=${enrollmentId}`
         );
 
-        if (quizRes.success && quizRes.data) {
+        if (quizRes.success && quizRes.data?.quiz) {
           setQuiz(quizRes.data.quiz);
         } else {
           setError(quizRes.error?.message || 'Failed to load quiz');
         }
-      } catch (err: any) {
-        setError(err.message || 'Something went wrong');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Something went wrong';
+        setError(msg);
       } finally {
         setLoading(false);
       }
@@ -101,14 +104,14 @@ export default function QuizPage() {
     fetchQuiz();
   }, [dayNumber, enrollmentId]);
 
-  const handleAnswer = (questionId: string, option: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: option }));
+  const handleAnswer = (questionId: number, optionIndex: number) => {
+    setAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
   };
 
   const handleSubmit = async () => {
     if (!quiz || !enrollmentId) return;
 
-    const allAnswered = quiz.questions.every(q => answers[q.id]);
+    const allAnswered = quiz.questions.every(q => answers[q.id] !== undefined);
     if (!allAnswered) {
       setError('Please answer all questions before submitting.');
       return;
@@ -117,35 +120,40 @@ export default function QuizPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const orderedAnswers = quiz.questions.map((q, idx) => {
-        const selectedOption = answers[q.id];
-        return quiz.questions[idx].options.indexOf(selectedOption);
-      });
+      const orderedAnswers = quiz.questions.map(q => String(answers[q.id]));
 
-      const response = await fetchApi<QuizResultResponse>(
-        `/api/quiz/${quiz.id}/submit`,
+      const response = await fetchApi<{
+        passed: boolean;
+        score: number;
+        percentage: number;
+        nextDayUnlocked: boolean;
+        cooldownUntil: string | null;
+        attemptNumber: number;
+        dayNumber: number;
+      }>(
+        `/api/quiz/${quiz.moduleId}/submit`,
         {
           method: 'POST',
-          body: JSON.stringify({ answers: orderedAnswers }),
+          body: JSON.stringify({ enrollmentId, answers: orderedAnswers }),
         }
       );
 
       if (response.success && response.data) {
-        const resultData = response.data.result;
         setResult({
-          passed: resultData.passed,
-          score: resultData.score,
-          percentage: Math.round((resultData.score / resultData.totalQuestions) * 100),
-          nextDayUnlocked: resultData.passed,
-          cooldownUntil: null,
-          attemptNumber: 1,
-          dayNumber: dayNumber,
+          passed: response.data.passed,
+          score: response.data.score,
+          percentage: response.data.percentage,
+          nextDayUnlocked: response.data.nextDayUnlocked,
+          cooldownUntil: response.data.cooldownUntil,
+          attemptNumber: response.data.attemptNumber,
+          dayNumber: response.data.dayNumber,
         });
       } else {
         setError(response.error?.message || 'Failed to submit quiz');
       }
-    } catch (err: any) {
-      setError('Submission failed');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Submission failed';
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -165,7 +173,7 @@ export default function QuizPage() {
   if (error && !quiz) {
     return (
       <div className="min-h-screen flex items-center justify-center pt-24">
-        <div className="flex flex-col items-center gap-4 text-center max-w-md">
+        <div className="flex flex-col items-center gap-4 text-center max-w-md p-6">
           <AlertCircle className="w-12 h-12 text-red-400" />
           <h2 className="text-2xl font-bold text-gray-900" style={{ ...outfit, fontWeight: 800 }}>
             Quiz Unavailable
@@ -260,7 +268,7 @@ export default function QuizPage() {
   if (!quiz) return null;
 
   const q = quiz.questions[currentQ];
-  const allAnswered = quiz.questions.every(q => answers[q.id]);
+  const allAnswered = quiz.questions.every(q => answers[q.id] !== undefined);
 
   return (
     <div className="min-h-screen pt-20 pb-16 px-6">
@@ -279,7 +287,6 @@ export default function QuizPage() {
           </h1>
           <p className="text-gray-500" style={{ ...poppins, fontSize: '14px' }}>
             {quiz.questions.length} question{quiz.questions.length !== 1 ? 's' : ''}
-            {quiz.timeLimit && ` · ${Math.floor(quiz.timeLimit / 60)} min time limit`}
           </p>
         </div>
 
@@ -288,9 +295,10 @@ export default function QuizPage() {
             <button
               key={i}
               onClick={() => setCurrentQ(i)}
-              className={`flex-1 h-2 rounded-full transition-all ${i === currentQ
+              className={`flex-1 h-2 rounded-full transition-all ${
+                i === currentQ
                   ? 'bg-purple-600'
-                  : answers[quiz.questions[i].id]
+                  : answers[quiz.questions[i].id] !== undefined
                     ? 'bg-green-400'
                     : 'bg-gray-200'
               }`}
@@ -309,21 +317,21 @@ export default function QuizPage() {
 
           <div className="space-y-3">
             {q.options.map((option, i) => {
-              const isSelected = answers[q.id] === option;
+              const isSelected = answers[q.id] === i;
               return (
                 <button
                   key={i}
-                  onClick={() => handleAnswer(q.id, option)}
-                  className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all ${isSelected
+                  onClick={() => handleAnswer(q.id, i)}
+                  className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all ${
+                    isSelected
                       ? 'border-purple-500 bg-purple-50 text-purple-900'
                       : 'border-gray-100 bg-white text-gray-700 hover:border-purple-200 hover:bg-purple-50/50'
-                    }`}
+                  }`}
                   style={{ ...poppins, fontWeight: isSelected ? 600 : 400, fontSize: '15px' }}
                 >
-                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full mr-3 text-sm ${isSelected
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-500'
-                    }`} style={{ ...poppins, fontWeight: 700 }}>
+                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full mr-3 text-sm ${
+                    isSelected ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-500'
+                  }`} style={{ ...poppins, fontWeight: 700 }}>
                     {String.fromCharCode(65 + i)}
                   </span>
                   {option}

@@ -31,9 +31,7 @@ export async function GET(_request: NextRequest) {
             select: {
                 id: true,
                 email: true,
-                username: true,
                 role: true,
-                permissions: true,
                 isActive: true,
                 lastLogin: true,
                 createdAt: true,

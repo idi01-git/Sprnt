@@ -30,32 +30,34 @@ export async function GET(
             revenueAgg,
         ] = await Promise.all([
             prisma.enrollment.count({
-                where: { courseId: course.id, paymentStatus: 'success' },
+                where: { courseId: course.id, paymentStatus: 'success', deletedAt: null },
             }),
             prisma.enrollment.count({
                 where: {
                     courseId: course.id,
                     paymentStatus: 'success',
                     certificateIssued: true,
+                    deletedAt: null,
                 },
             }),
             prisma.enrollment.aggregate({
-                where: { courseId: course.id, paymentStatus: 'success' },
+                where: { courseId: course.id, paymentStatus: 'success', deletedAt: null },
                 _sum: { amountPaid: true },
             }),
         ])
 
         return createSuccessResponse({
-            courseId,
-            courseName: course.courseName,
-            totalEnrollments,
-            completedEnrollments,
-            completionRate:
-                totalEnrollments > 0
-                    ? Math.round((completedEnrollments / totalEnrollments) * 100)
-                    : 0,
-            revenue: revenueAgg._sum.amountPaid || 0,
-            // Add more stats as needed
+            stats: {
+                courseId,
+                courseName: course.courseName,
+                totalEnrollments,
+                completedEnrollments,
+                completionRate:
+                    totalEnrollments > 0
+                        ? Math.round((completedEnrollments / totalEnrollments) * 100)
+                        : 0,
+                revenue: Number(revenueAgg._sum.amountPaid) || 0,
+            },
         })
     } catch (error) {
         if (error instanceof AuthError) {

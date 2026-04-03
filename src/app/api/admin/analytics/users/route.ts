@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
             totalUsers,
             newUsersInPeriod,
             verifiedEmail,
-            verifiedPhone,
             studyLevelDist,
         ] = await Promise.all([
             prisma.user.count({ where: { deletedAt: null } }),
@@ -45,9 +44,6 @@ export async function GET(request: NextRequest) {
             }),
             prisma.user.count({
                 where: { emailVerified: true, deletedAt: null },
-            }),
-            prisma.user.count({
-                where: { phoneVerified: true, deletedAt: null },
             }),
             prisma.user.groupBy({
                 by: ['studyLevel'],
@@ -61,7 +57,6 @@ export async function GET(request: NextRequest) {
                 totalUsers,
                 newUsersInPeriod,
                 emailVerified: verifiedEmail,
-                phoneVerified: verifiedPhone,
                 studyLevelDistribution: studyLevelDist.map((s) => ({
                     studyLevel: s.studyLevel ?? 'unknown',
                     count: s._count.id,

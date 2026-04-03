@@ -1,8 +1,13 @@
-import { Suspense } from 'react';
+import { Suspense, memo } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { CourseCatalog } from '@/components/landing/CourseCatalog';
 import { getCourses, getBranches } from '@/lib/api';
+import { validateRequest } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
+
+// Memoized CourseCatalog to prevent unnecessary re-renders
+const MemoizedCourseCatalog = memo(CourseCatalog);
 
 export const metadata = {
   title: 'Courses - Sprintern',
@@ -24,8 +29,31 @@ export default async function CoursesPage({
     getBranches(),
   ]);
 
-  const initialCourses = coursesRes.success ? coursesRes.data?.courses : [];
-  const initialBranches = branchesRes.success ? branchesRes.data?.branches : [];
+  // Memoize to ensure stable references across re-renders
+  const initialCourses = coursesRes.success ? coursesRes.data?.courses ?? [] : [];
+  const initialBranches = branchesRes.success ? branchesRes.data?.branches ?? [] : [];
+
+  // Get enrolled course IDs for logged-in user to filter them out
+  let enrolledCourseIds: string[] = [];
+  const { user } = await validateRequest();
+  if (user) {
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        userId: user.id,
+        paymentStatus: 'success',
+        deletedAt: null,
+      },
+      select: {
+        course: {
+          select: {
+            courseId: true,
+          },
+        },
+      },
+    });
+    // Sort for stable reference when content is same
+    enrolledCourseIds = enrollments.map(e => e.course.courseId).sort();
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -34,13 +62,13 @@ export default async function CoursesPage({
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 py-16">
           <div className="max-w-7xl mx-auto px-6">
-            <h1 
+            <h1
               className="text-4xl font-bold text-white mb-4"
               style={{ fontFamily: 'var(--font-outfit)' }}
             >
               Our Courses
             </h1>
-            <p 
+            <p
               className="text-white/80 text-lg max-w-2xl"
               style={{ fontFamily: 'var(--font-poppins)' }}
             >
@@ -51,9 +79,10 @@ export default async function CoursesPage({
 
         {/* Course Catalog */}
         <Suspense fallback={<div className="py-20 text-center">Loading...</div>}>
-          <CourseCatalog 
-            initialCourses={initialCourses} 
-            initialBranches={initialBranches} 
+          <MemoizedCourseCatalog
+            initialCourses={initialCourses}
+            initialBranches={initialBranches}
+            enrolledCourseIds={enrolledCourseIds}
           />
         </Suspense>
       </div>

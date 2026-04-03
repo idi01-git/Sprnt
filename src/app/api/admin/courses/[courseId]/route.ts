@@ -2,14 +2,16 @@ import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, requireSuperAdmin, AuthError } from '@/lib/auth/guards'
 import {
     createSuccessResponse,
+    createErrorResponse,
     badRequest,
     notFound,
     conflict,
     serverError,
     HttpStatus,
+    ErrorCode,
 } from '@/lib/api-response'
 import { adminUpdateCourseSchema } from '@/lib/validations/admin'
-import { del, CACHE_KEYS } from '@/lib/cache'
+import { del, delPattern, CACHE_KEYS } from '@/lib/cache'
 
 // =============================================================================
 // Helpers
@@ -40,6 +42,8 @@ export async function GET(
         await requireAdminOrAbove()
         const { courseId } = await params
 
+        console.log(`[GET /api/admin/courses/${courseId}] Fetching course detail`)
+
         const course = await prisma.course.findUnique({
             where: { courseId },
             include: {
@@ -47,25 +51,64 @@ export async function GET(
                     orderBy: { dayNumber: 'asc' },
                     select: {
                         id: true,
+                        courseId: true,
                         dayNumber: true,
                         title: true,
+                        contentText: true,
+                        youtubeUrl: true,
+                        notesPdfUrl: true,
                         isFreePreview: true,
+                        createdAt: true,
+                        updatedAt: true,
                     },
-                },
-                _count: {
-                    select: { enrollments: true, certificates: true, modules: true },
                 },
             },
         })
 
-        if (!course) return notFound('Course')
+        if (!course) {
+            console.log(`[GET /api/admin/courses/${courseId}] Course not found in DB`)
+            return notFound('Course')
+        }
 
-        return createSuccessResponse(course)
+        console.log(`[GET /api/admin/courses/${courseId}] Found course:`, course.courseName)
+
+        // Separate count query for enrollments to properly filter deletedAt
+        const enrollmentCount = await prisma.enrollment.count({
+            where: { courseId: course.id, deletedAt: null },
+        })
+
+        // Map Prisma fields to API response format with serialized dates
+        const mappedCourse = {
+            id: course.id,
+            courseId: course.courseId,
+            courseName: course.courseName,
+            slug: course.slug,
+            branch: course.affiliatedBranch,
+            price: Number(course.coursePrice),
+            courseDescription: course.courseDescription || '',
+            courseThumbnail: course.courseThumbnail || '',
+            problemStatementText: course.problemStatementText || '',
+            isActive: course.isActive,
+            tags: course.tags || [],
+            createdAt: course.createdAt.toISOString(),
+            updatedAt: course.updatedAt.toISOString(),
+            modules: (course.modules || []).map(m => ({
+                ...m,
+                createdAt: m.createdAt.toISOString(),
+                updatedAt: m.updatedAt.toISOString(),
+            })),
+            _count: {
+                enrollments: enrollmentCount,
+                modules: course._count?.modules || 0,
+            },
+        }
+
+        return createSuccessResponse({ course: mappedCourse })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
-        console.error('[GET /api/admin/courses/[courseId]]', error)
+        console.error('[GET /api/admin/courses/[courseId]]', error, { courseId })
         return serverError()
     }
 }
@@ -104,17 +147,17 @@ export async function PUT(
         }
 
         const updated = await prisma.course.update({
-            where: { courseId },
+where: { courseId },
             data: updateData,
         })
 
-        del(CACHE_KEYS.COURSES_LIST)
+        delPattern(CACHE_KEYS.COURSES_LIST)
         del(CACHE_KEYS.COURSES_BRANCHES)
 
         return createSuccessResponse(updated)
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[PUT /api/admin/courses/[courseId]]', error)
         return serverError()
@@ -148,15 +191,64 @@ export async function DELETE(
             },
         })
 
-        del(CACHE_KEYS.COURSES_LIST)
+        // Delete all course list caches (keys have suffixes for branch/search/sort/page/limit)
+        delPattern(CACHE_KEYS.COURSES_LIST)
         del(CACHE_KEYS.COURSES_BRANCHES)
 
         return createSuccessResponse({ message: 'Course soft-deleted', course: deleted })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[DELETE /api/admin/courses/[courseId]]', error)
+        return serverError()
+    }
+}
+
+// =============================================================================
+// PATCH /api/admin/courses/{courseId} — Restore deleted course
+// =============================================================================
+
+export async function PATCH(
+    request: Request,
+    { params }: { params: Promise<{ courseId: string }> },
+) {
+    try {
+        await requireSuperAdmin()
+        const { courseId } = await params
+        const url = new URL(request.url)
+        const action = url.searchParams.get('action')
+
+        // Handle restore action
+        if (action === 'restore') {
+            const course = await findCourseByBusinessId(courseId)
+            if (!course) return notFound('Course')
+
+            if (!course.deletedAt) {
+                return conflict('Course is not deleted')
+            }
+
+            const restored = await prisma.course.update({
+                where: { courseId },
+                data: {
+                    deletedAt: null,
+                    isActive: true,
+                },
+            })
+
+            // Delete all course list caches (keys have suffixes for branch/search/sort/page/limit)
+            delPattern(CACHE_KEYS.COURSES_LIST)
+            del(CACHE_KEYS.COURSES_BRANCHES)
+
+            return createSuccessResponse({ course: restored, message: 'Course restored successfully' })
+        }
+
+        return badRequest('Invalid action. Use ?action=restore')
+    } catch (error) {
+        if (error instanceof AuthError) {
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
+        }
+        console.error('[PATCH /api/admin/courses/[courseId]]', error)
         return serverError()
     }
 }

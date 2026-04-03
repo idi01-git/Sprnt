@@ -2,26 +2,14 @@ import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
 import {
     createSuccessResponse,
+    createErrorResponse,
     badRequest,
     notFound,
     serverError,
     HttpStatus,
+    ErrorCode,
 } from '@/lib/api-response'
 import { adminReplaceQuizSchema } from '@/lib/validations/admin'
-
-// =============================================================================
-// Helper: Verify module context
-// =============================================================================
-
-async function findModule(courseId: string, moduleId: string) {
-    return prisma.courseModule.findFirst({
-        where: { id: moduleId, course: { courseId } },
-    })
-}
-
-// =============================================================================
-// GET /api/admin/courses/[courseId]/modules/[moduleId]/quiz — Admin view
-// =============================================================================
 
 export async function GET(
     _request: Request,
@@ -31,14 +19,20 @@ export async function GET(
         await requireAdminOrAbove()
         const { courseId, moduleId } = await params
 
-        const module = await findModule(courseId, moduleId)
+        const module = await prisma.courseModule.findFirst({
+            where: { id: moduleId, course: { courseId } },
+        })
         if (!module) return notFound('Module')
 
-        // Return raw quizQuestions JSON (includes correct answers)
-        return createSuccessResponse(module.quizQuestions)
+        const questions = await prisma.quizQuestion.findMany({
+            where: { moduleId },
+            orderBy: { orderIndex: 'asc' },
+        })
+
+        return createSuccessResponse(questions)
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error(
             '[GET /api/admin/courses/[courseId]/modules/[moduleId]/quiz]',
@@ -48,10 +42,6 @@ export async function GET(
     }
 }
 
-// =============================================================================
-// PUT /api/admin/courses/[courseId]/modules/[moduleId]/quiz — Replace quiz
-// =============================================================================
-
 export async function PUT(
     request: Request,
     { params }: { params: Promise<{ courseId: string; moduleId: string }> },
@@ -60,7 +50,9 @@ export async function PUT(
         await requireAdminOrAbove()
         const { courseId, moduleId } = await params
 
-        const module = await findModule(courseId, moduleId)
+        const module = await prisma.courseModule.findFirst({
+            where: { id: moduleId, course: { courseId } },
+        })
         if (!module) return notFound('Module')
 
         const body = await request.json().catch(() => null)
@@ -73,17 +65,31 @@ export async function PUT(
             })
         }
 
-        const updated = await prisma.courseModule.update({
-            where: { id: moduleId },
-            data: {
-                quizQuestions: parsed.data.questions,
-            },
+        await prisma.$transaction([
+            prisma.quizQuestion.deleteMany({ where: { moduleId } }),
+            prisma.quizQuestion.createMany({
+                data: parsed.data.questions.map((q, idx) => {
+                    const correctIdx = q.options.findIndex((o: { isCorrect: boolean }) => o.isCorrect)
+                    return {
+                        moduleId,
+                        questionText: q.question,
+                        options: q.options.map((o: { text: string }) => o.text) as unknown as object,
+                        correctOptionIndex: correctIdx,
+                        orderIndex: idx,
+                    }
+                }),
+            }),
+        ])
+
+        const updated = await prisma.quizQuestion.findMany({
+            where: { moduleId },
+            orderBy: { orderIndex: 'asc' },
         })
 
-        return createSuccessResponse(updated.quizQuestions)
+        return createSuccessResponse(updated)
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error(
             '[PUT /api/admin/courses/[courseId]/modules/[moduleId]/quiz]',

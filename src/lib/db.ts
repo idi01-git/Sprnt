@@ -56,5 +56,4 @@ export type {
     AdminSession,
     Course,
     Submission,
-    Certificate,
 } from '@/generated/prisma/client'

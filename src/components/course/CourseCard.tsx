@@ -62,7 +62,7 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
               <div className="absolute inset-0 rounded-full blur-lg opacity-70"
                 style={{ boxShadow: '0 0 30px rgba(251, 146, 60, 0.6)' }}
               />
-              <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-yellow-400 to-orange-400 shadow-lg border border-yellow-300/50">
+              <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-linear-to-r from-yellow-400 to-orange-400 shadow-lg border border-yellow-300/50">
                 <Sparkles className="w-4 h-4 text-white" />
                 <span
                   className="text-white"
@@ -81,15 +81,15 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
 
         {/* Enhanced 3D Shadow */}
         <div 
-          className={`absolute inset-0 bg-gradient-to-br ${gradient} rounded-3xl transform translate-y-0 translate-x-0 group-hover:translate-y-1 group-hover:translate-x-1 transition-all duration-100 ease-out opacity-10`} 
+          className={`absolute inset-0 bg-linear-to-br ${gradient} rounded-3xl transform translate-y-0 translate-x-0 group-hover:translate-y-1 group-hover:translate-x-1 transition-all duration-100 ease-out opacity-10`} 
         />
 
         {/* Multi-layer Neon Glow - Enhanced */}
         <div 
-          className={`absolute -inset-3 rounded-3xl bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-20 blur-2xl transition-all duration-700 ease-out`} 
+          className={`absolute -inset-3 rounded-3xl bg-linear-to-br ${gradient} opacity-0 group-hover:opacity-20 blur-2xl transition-all duration-700 ease-out`} 
         />
         <div 
-          className={`absolute -inset-1 rounded-3xl bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-30 blur-xl transition-all duration-500 ease-out`} 
+          className={`absolute -inset-1 rounded-3xl bg-linear-to-br ${gradient} opacity-0 group-hover:opacity-30 blur-xl transition-all duration-500 ease-out`} 
         />
 
         {/* Glassmorphic Card Container - Enhanced */}
@@ -107,12 +107,12 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
         >
           {/* Overall Shine Effect */}
           <div 
-            className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/50 to-white/0 transform -translate-x-full -translate-y-full group-hover:translate-x-full group-hover:translate-y-full transition-transform duration-1000 ease-out"
+            className="absolute inset-0 bg-linear-to-br from-white/0 via-white/50 to-white/0 transform -translate-x-full -translate-y-full group-hover:translate-x-full group-hover:translate-y-full transition-transform duration-1000 ease-out"
             style={{ transform: 'rotate(-10deg) scale(2)' }}
           />
 
           {/* Header with Enhanced Gradient Background */}
-          <div className={`relative p-4 bg-gradient-to-br ${gradient} overflow-hidden`}>
+          <div className={`relative p-4 bg-linear-to-br ${gradient} overflow-hidden`}>
             {/* Animated Pattern */}
             <div className="absolute inset-0 opacity-3">
               <div 
@@ -126,7 +126,7 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
 
             {/* Shine effect on header */}
             <div 
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000" 
+              className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000" 
             />
 
             {/* Branch Badge & Rating */}
@@ -240,7 +240,7 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
                   }}
                 >
                   <div 
-                    className={`flex-shrink-0 w-5 h-5 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center mt-0.5 transition-all duration-300`}
+                    className={`shrink-0 w-5 h-5 rounded-lg bg-linear-to-br from-green-400 to-emerald-500 flex items-center justify-center mt-0.5 transition-all duration-300`}
                     style={{
                       boxShadow: isHovered ? '0 4px 12px rgba(52, 211, 153, 0.4)' : '0 2px 8px rgba(52, 211, 153, 0.2)',
                       transform: isHovered ? 'scale(1.1) rotate(5deg)' : 'scale(1)'
@@ -268,7 +268,7 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
               <div>
                 <div className="flex items-baseline gap-2">
                   <span
-                    className={`bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}
+                    className={`bg-linear-to-r ${gradient} bg-clip-text text-transparent`}
                     style={{
                       fontFamily: "'Outfit', sans-serif",
                       fontWeight: 800,
@@ -314,27 +314,32 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
                   const res = await fetch('/api/auth/session', { credentials: 'include' });
                   const data = await res.json().catch(() => null);
                   if (data?.success && data?.data?.user) {
+                    // User is logged in, go to course
                     router.push(`/courses/${course.slug}`);
                   } else {
-                    router.push('/register');
+                    // User not logged in, redirect to login page with return URL
+                    const returnUrl = `/courses/${course.slug}`;
+                    router.push(`/login?redirect=${encodeURIComponent(returnUrl)}`);
                   }
                 } catch {
-                  router.push('/register');
+                  // Network error, redirect to login
+                  const returnUrl = `/courses/${course.slug}`;
+                  router.push(`/login?redirect=${encodeURIComponent(returnUrl)}`);
                 }
               }}
               className={`relative w-full py-4 rounded-xl overflow-hidden group/btn transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl`}
             >
               {/* 3D Shadow */}
-              <div className={`absolute inset-0 bg-gradient-to-r ${gradient} opacity-70 transform translate-y-1 group-hover/btn:translate-y-2 transition-all duration-300 rounded-xl`} />
+              <div className={`absolute inset-0 bg-linear-to-r ${gradient} opacity-70 transform translate-y-1 group-hover/btn:translate-y-2 transition-all duration-300 rounded-xl`} />
 
               {/* Button Gradient */}
-              <div className={`absolute inset-0 bg-gradient-to-r ${gradient}`} />
+              <div className={`absolute inset-0 bg-linear-to-r ${gradient}`} />
 
               {/* Shine Effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/40 to-white/0 translate-x-[-200%] group-hover/btn:translate-x-[200%] transition-transform duration-700" />
+              <div className="absolute inset-0 bg-linear-to-r from-white/0 via-white/40 to-white/0 translate-x-[-200%] group-hover/btn:translate-x-[200%] transition-transform duration-700" />
 
               {/* Inner Highlight */}
-              <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-b from-white/20 via-transparent to-transparent" />
 
               <span
                 className="relative flex items-center justify-center gap-2 text-white z-10"
@@ -352,7 +357,7 @@ export function CourseCard({ course, index = 0, popular = false }: CourseCardPro
 
           {/* Decorative Corner with pulse */}
           <div 
-            className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${gradient} rounded-bl-full transition-opacity duration-500`}
+            className={`absolute top-0 right-0 w-32 h-32 bg-linear-to-br ${gradient} rounded-bl-full transition-opacity duration-500`}
             style={{ opacity: isHovered ? 0.08 : 0.04 }}
           />
         </div>

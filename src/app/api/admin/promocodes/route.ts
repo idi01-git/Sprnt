@@ -1,6 +1,7 @@
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, createErrorResponse, createPaginatedResponse, badRequest, conflict, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
+import { createSuccessResponse, createErrorResponse, badRequest, conflict, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
 import { adminPromocodeListQuerySchema, adminCreatePromocodeSchema } from '@/lib/validations/admin'
 import type { Prisma } from '@/generated/prisma/client'
 import { logAdminAction } from '@/lib/admin-logger'
@@ -55,16 +56,34 @@ export async function GET(request: Request) {
                 orderBy: { createdAt: 'desc' },
                 include: {
                     _count: { select: { usages: true } },
-                    creator: { select: { username: true } },
+                    creator: { select: { email: true } },
                 }
             }),
             prisma.promocode.count({ where }),
         ])
 
-        return createPaginatedResponse(promocodes, { total, page, pageSize: limit })
+        const items = promocodes.map(p => ({
+            id: p.id,
+            code: p.code,
+            description: p.description || null,
+            discountType: p.discountType,
+            discountValue: Number(p.discountValue),
+            maxDiscount: p.maxDiscount ? Number(p.maxDiscount) : null,
+            validFrom: p.validFrom?.toISOString() || null,
+            validUntil: p.validUntil?.toISOString() || null,
+            isActive: p.isActive,
+            usageCount: p._count.usages,
+            creatorEmail: p.creator?.email || null,
+            createdAt: p.createdAt.toISOString(),
+        }))
+
+        const totalPages = Math.ceil(total / limit)
+        const meta = { total, page, pageSize: limit, totalPages, hasNext: page < totalPages, hasPrev: page > 1 }
+
+        return NextResponse.json({ success: true, data: { promocodes: items }, meta }, { status: HttpStatus.OK })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/promocodes]', error)
         return serverError()

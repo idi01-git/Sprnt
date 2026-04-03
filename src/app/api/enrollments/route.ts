@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
                     currentDay: true,
                     day7Completed: true,
                     certificateIssued: true,
+                    certificateId: true,
                     enrolledAt: true,
                     completedAt: true,
                     course: {
@@ -74,6 +75,9 @@ export async function GET(request: NextRequest) {
                             slug: true,
                             courseThumbnail: true,
                             affiliatedBranch: true,
+                            _count: {
+                                select: { modules: true },
+                            },
                         },
                     },
                     _count: {
@@ -99,10 +103,11 @@ export async function GET(request: NextRequest) {
             currentDay: e.currentDay,
             day7Completed: e.day7Completed,
             certificateIssued: e.certificateIssued,
+            certificateId: e.certificateId,
             daysCompleted: e._count.dailyProgress,
-            totalDays: 7,
-            enrolledAt: e.enrolledAt,
-            completedAt: e.completedAt,
+            totalDays: e.course._count.modules > 0 ? e.course._count.modules : 7, // Use actual module count
+            enrolledAt: e.enrolledAt.toISOString(),
+            completedAt: e.completedAt?.toISOString() ?? null,
             status: e.completedAt ? 'completed' : 'in_progress',
         }))
 

@@ -1,6 +1,7 @@
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireReviewerOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, createPaginatedResponse, badRequest, serverError, HttpStatus } from '@/lib/api-response'
+import { createSuccessResponse, createErrorResponse, badRequest, serverError, HttpStatus, ErrorCode } from '@/lib/api-response'
 import { adminSubmissionListQuerySchema } from '@/lib/validations/admin'
 import type { Prisma } from '@/generated/prisma/client'
 
@@ -59,16 +60,29 @@ export async function GET(request: Request) {
                             course: { select: { courseName: true, courseId: true } }
                         }
                     },
-                    assignedAdmin: { select: { username: true } },
+                    assignedAdmin: { select: { email: true } },
                 }
             }),
             prisma.submission.count({ where }),
         ])
 
-        return createPaginatedResponse(submissions, { total, page, pageSize: limit })
+        const items = submissions.map(s => ({
+            id: s.id,
+            userName: s.user.name,
+            userEmail: s.user.email,
+            courseName: s.enrollment.course.courseName,
+            status: s.reviewStatus,
+            assignedAdminEmail: s.assignedAdmin?.email || null,
+            submittedAt: s.submittedAt.toISOString(),
+        }))
+
+        const totalPages = Math.ceil(total / limit)
+        const meta = { total, page, pageSize: limit, totalPages, hasNext: page < totalPages, hasPrev: page > 1 }
+
+        return NextResponse.json({ success: true, data: { submissions: items }, meta }, { status: HttpStatus.OK })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/submissions]', error)
         return serverError()

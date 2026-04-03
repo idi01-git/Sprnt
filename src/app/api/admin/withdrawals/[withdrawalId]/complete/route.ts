@@ -44,14 +44,6 @@ export async function POST(
                     adminId,
                 },
             }),
-            prisma.notification.create({
-                data: {
-                    userId: withdrawal.userId,
-                    type: 'withdrawal_completed',
-                    title: 'Withdrawal Completed',
-                    message: `Your withdrawal of ₹${withdrawal.amount} has been processed. Transaction ID: ${parsed.data.transactionId}`,
-                },
-            }),
         ])
 
         await logAdminAction(adminId, 'withdrawal_completed', 'withdrawal', withdrawalId, { transactionId: parsed.data.transactionId })

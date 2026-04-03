@@ -41,12 +41,12 @@ export async function GET(_request: NextRequest) {
                 where: { userId: user.id, status: 'pending' },
                 _sum: { amount: true },
             }),
-            // Find referrals where withdrawal is not yet eligible (7-day lock period)
+            // Find referrals where withdrawal is not yet eligible (auto-approve period)
             prisma.referral.aggregate({
                 where: {
                     referrerId: user.id,
                     status: 'pending',
-                    withdrawalEligibleAt: { gt: now },
+                    autoApproveAt: { gt: now },
                 },
                 _sum: { amount: true },
             }),
@@ -57,7 +57,7 @@ export async function GET(_request: NextRequest) {
         const lockedFromReferrals = Number(lockedReferrals._sum.amount ?? 0)
 
         // Total locked = pending withdrawals + locked referral totalLocked = pendingWithdrawalAmountValue + lockedFromRefer earnings
-        constrals
+        const totalLocked = pendingWithdrawalAmountValue + lockedFromReferrals
 
         // Available balance = total - locked (what can be withdrawn now)
         const availableBalance = Math.max(0, totalBalance - totalLocked)
@@ -76,19 +76,16 @@ export async function GET(_request: NextRequest) {
             wallet: {
                 totalBalance,
                 availableBalance,
-                lockedBalance: totalLocked,
-                pendingWithdrawal: pendingWithdrawalAmountValue,
-                lockedFromReferrals,
-                totalWithdrawn: Math.abs(Number(totalWithdrawn._sum.amount ?? 0)),
-                upiId: userData?.upiId ?? null,
-                hasPendingWithdrawal: !!pendingWithdrawal,
-                pendingWithdrawalDetails: pendingWithdrawal
+                lockedAmount: totalLocked,
+                pendingWithdrawal: pendingWithdrawal
                     ? {
                         id: pendingWithdrawal.id,
                         amount: Number(pendingWithdrawal.amount),
-                        requestedAt: pendingWithdrawal.requestedAt,
+                        requestedAt: pendingWithdrawal.requestedAt.toISOString(),
                     }
                     : null,
+                hasPendingWithdrawal: !!pendingWithdrawal,
+                upiId: userData?.upiId ?? null,
             },
         })
     } catch (error) {

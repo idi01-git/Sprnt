@@ -41,10 +41,11 @@ export async function GET(
             prisma.transaction.count({ where }),
         ])
 
-        // Convert Decimal amounts to numbers
+        // Convert Decimal amounts and serialize dates
         const transformed = transactions.map(t => ({
             ...t,
             amount: Number(t.amount),
+            createdAt: t.createdAt.toISOString(),
         }))
 
         return createPaginatedResponse(transformed, { total, page, pageSize: limit })

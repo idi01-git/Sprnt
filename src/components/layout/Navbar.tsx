@@ -207,7 +207,8 @@ export function Navbar() {
         setSuccessMessage('Logged in successfully!');
         setTimeout(() => {
           closeModal();
-          window.location.href = '/dashboard';
+          // Use replace instead of href to avoid history issues
+          window.location.replace('/dashboard');
         }, 800);
       } else {
         const parsed = parseApiError(data, res.status);
@@ -306,7 +307,7 @@ export function Navbar() {
                   style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500, fontSize: '15px' }}
                 >
                   {item.label}
-                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-600 to-blue-600 group-hover:w-full transition-all duration-300" />
+                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-linear-to-r from-purple-600 to-blue-600 group-hover:w-full transition-all duration-300" />
                 </Link>
               ))}
               <Link
@@ -315,7 +316,7 @@ export function Navbar() {
                 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500, fontSize: '15px' }}
               >
                 Verify Certificate
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-600 to-blue-600 group-hover:w-full transition-all duration-300" />
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-linear-to-r from-purple-600 to-blue-600 group-hover:w-full transition-all duration-300" />
               </Link>
             </div>
 
@@ -327,7 +328,7 @@ export function Navbar() {
                     className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-purple-50 transition-all duration-200 group"
                     style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
                       {authedUser.name.charAt(0).toUpperCase()}
                     </div>
                     <span className="hidden sm:block text-gray-700 group-hover:text-purple-600 transition-colors text-sm max-w-[120px] truncate">
@@ -393,8 +394,8 @@ export function Navbar() {
                     className="relative px-6 py-3 rounded-xl overflow-hidden group transition-all duration-200 hover:scale-105 hover:-translate-y-0.5 active:scale-95"
                     style={btnStyle}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 bg-[length:200%_100%] animate-gradient" />
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500" />
+                    <div className="absolute inset-0 bg-linear-to-r from-purple-600 via-blue-600 to-purple-600 bg-size-[200%_100%] animate-gradient" />
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-linear-to-r from-purple-500 via-blue-500 to-purple-500" />
                     <span className="relative text-white z-10">Start Free Trial</span>
                   </button>
 
@@ -406,7 +407,7 @@ export function Navbar() {
       </nav>
 
       {showModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-scale-up max-h-[92vh] overflow-y-auto">
             <div className="flex justify-end p-6 pb-0">
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 transition-all">
@@ -497,7 +498,7 @@ export function Navbar() {
                   <button
                     onClick={handleLogin}
                     disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                    className="w-full bg-linear-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                     style={btnStyle}
                   >
                     {isLoading ? 'LOGGING IN...' : 'LOGIN'}
@@ -680,7 +681,7 @@ export function Navbar() {
                   <button
                     onClick={handleSignUp}
                     disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                    className="w-full bg-linear-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                     style={btnStyle}
                   >
                     {isLoading ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}
@@ -731,7 +732,7 @@ export function Navbar() {
                   <button
                     onClick={handleForgotPassword}
                     disabled={isLoading || !!successMessage}
-                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                    className="w-full bg-linear-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                     style={btnStyle}
                   >
                     {isLoading ? 'SENDING...' : 'SEND RESET LINK'}

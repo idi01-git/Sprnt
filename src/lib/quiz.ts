@@ -47,8 +47,8 @@ export interface QuizSubmissionResult {
 
 /** System-configurable quiz parameters */
 export interface QuizConfig {
-    /** Number of correct answers required to pass (default 4/5) */
-    readonly passScore: number
+    /** Minimum percentage required to pass (default 80) */
+    readonly passPercentage: number
     /** Minutes of cooldown after every N failures (default 30) */
     readonly cooldownMinutes: number
     /** Cooldown triggers every N failed attempts (default 3) */
@@ -57,8 +57,6 @@ export interface QuizConfig {
     readonly totalDays: number
     /** Days to complete final project after Day 7 pass (default 7) */
     readonly submissionDeadlineDays: number
-    /** Number of answer choices per quiz (default 5) */
-    readonly expectedAnswerCount: number
 }
 
 /** Structured error for quiz operations */
@@ -90,12 +88,11 @@ export class QuizError extends Error {
 // =============================================================================
 
 const DEFAULT_CONFIG: QuizConfig = {
-    passScore: 4,
+    passPercentage: 80,
     cooldownMinutes: 30,
     attemptsBetweenCooldown: 3,
     totalDays: 7,
     submissionDeadlineDays: 7,
-    expectedAnswerCount: 5,
 }
 
 // =============================================================================
@@ -127,12 +124,11 @@ export async function getQuizConfig(): Promise<QuizConfig> {
             where: {
                 settingKey: {
                     in: [
-                        'quiz_pass_score',
+                        'quiz_pass_percentage',
                         'quiz_cooldown_minutes',
                         'quiz_cooldown_attempts',
                         'quiz_total_days',
                         'quiz_submission_deadline_days',
-                        'quiz_expected_answer_count',
                     ],
                 },
             },
@@ -143,12 +139,11 @@ export async function getQuizConfig(): Promise<QuizConfig> {
         )
 
         const config: QuizConfig = {
-            passScore: asNumber(settingsMap.get('quiz_pass_score'), DEFAULT_CONFIG.passScore),
+            passPercentage: asNumber(settingsMap.get('quiz_pass_percentage'), DEFAULT_CONFIG.passPercentage),
             cooldownMinutes: asNumber(settingsMap.get('quiz_cooldown_minutes'), DEFAULT_CONFIG.cooldownMinutes),
             attemptsBetweenCooldown: asNumber(settingsMap.get('quiz_cooldown_attempts'), DEFAULT_CONFIG.attemptsBetweenCooldown),
             totalDays: asNumber(settingsMap.get('quiz_total_days'), DEFAULT_CONFIG.totalDays),
             submissionDeadlineDays: asNumber(settingsMap.get('quiz_submission_deadline_days'), DEFAULT_CONFIG.submissionDeadlineDays),
-            expectedAnswerCount: asNumber(settingsMap.get('quiz_expected_answer_count'), DEFAULT_CONFIG.expectedAnswerCount),
         }
 
         set(CACHE_KEYS.QUIZ_CONFIG, config, CACHE_TTL.VERY_LONG)
@@ -280,24 +275,21 @@ export async function validateQuizPrerequisites(
 // =============================================================================
 
 /**
- * Grade a quiz by comparing user answers against correct answers.
+ * Grade a quiz by comparing user answer indices against correct option indices.
  *
- * @param userAnswers    - Student's submitted answers (e.g. `['B', 'A', 'C', 'D', 'A']`)
- * @param correctAnswers - Correct answers for the quiz
+ * @param userAnswers    - Student's submitted answers as 0-based option indices (e.g. `[0, 1, 2, 3, 0]`)
+ * @param correctAnswers - Correct answer indices (e.g. `[0, 1, 2, 1, 0]`)
  * @returns Score breakdown
  *
  * @example
  * ```ts
- * const score = calculateQuizScore(
- *   ['B', 'A', 'C', 'D', 'A'],
- *   ['B', 'A', 'C', 'B', 'A'],
- * )
+ * const score = calculateQuizScore([0, 1, 2, 3, 0], [0, 1, 2, 1, 0])
  * // { score: 4, percentage: 80, correct: 4, total: 5 }
  * ```
  */
 export function calculateQuizScore(
-    userAnswers: readonly string[],
-    correctAnswers: readonly string[],
+    userAnswers: readonly number[],
+    correctAnswers: readonly number[],
 ): QuizScore {
     if (correctAnswers.length === 0) {
         throw new Error('Correct answers array cannot be empty')
@@ -313,7 +305,7 @@ export function calculateQuizScore(
         if (
             userAnswer !== undefined &&
             correctAnswer !== undefined &&
-            userAnswer.trim().toUpperCase() === correctAnswer.trim().toUpperCase()
+            userAnswer === correctAnswer
         ) {
             correct++
         }
@@ -334,65 +326,42 @@ export function calculateQuizScore(
 /**
  * Submit and process a quiz attempt in a single atomic Prisma transaction.
  *
- * This function orchestrates the entire quiz state machine:
+ * FIXED for MVP schema:
+ * - Questions fetched from quiz_questions table (not JSONB in course_modules)
+ * - Answers are 0-based integer indices (not letter strings)
+ * - Pass threshold calculated as ceil(questionCount * passPercentage/100)
+ * - Notifications table removed — no notification.create calls
+ * - Optimistic locking via client-sent currentAttemptCount
  *
- * ```
- * LOCKED → UNLOCK → ATTEMPT → [pass?]
- *                                ├─ YES → MARK PASSED → UNLOCK NEXT DAY → (Day 7? set deadline)
- *                                └─ NO  → attempts++ → [attempts % 3 == 0?]
- *                                                        ├─ YES → COOLDOWN 30min
- *                                                        └─ NO  → can retry immediately
- * ```
- *
- * **Atomicity**: Every database mutation happens inside `prisma.$transaction`.
- * If any step fails, all changes are rolled back.
- *
- * **Idempotency**: The `quizAttempts` counter and `quizPassed` flag prevent
- * double-processing. Prerequisites are validated before the transaction begins.
- *
- * @param enrollmentId  - Enrollment ID
- * @param dayNumber     - Day number (1–7)
- * @param userAnswers   - Student's answers (exactly 5 strings)
- * @param correctAnswers - Correct answers for this day's quiz
+ * @param enrollmentId        - Enrollment ID
+ * @param dayNumber           - Day number (1–7)
+ * @param userAnswers         - Student's answers as 0-based option indices (e.g. [0, 1, 2, 3, 0])
+ * @param moduleId             - CourseModule ID to fetch questions from
+ * @param currentAttemptCount - Client-sent attempt count for optimistic locking
  * @returns Full submission result
- *
- * @example
- * ```ts
- * const result = await submitQuiz(
- *   'enroll_abc',
- *   3,
- *   ['B', 'A', 'C', 'D', 'A'],
- *   ['B', 'A', 'C', 'B', 'A'],
- * )
- *
- * if (result.passed) {
- *   console.log('Next day unlocked:', result.nextDayUnlocked)
- * } else if (result.cooldownUntil) {
- *   console.log('Cooldown until:', result.cooldownUntil)
- * }
- * ```
  */
 export async function submitQuiz(
     enrollmentId: string,
     dayNumber: number,
-    userAnswers: readonly string[],
-    correctAnswers: readonly string[],
+    userAnswers: readonly number[],
+    moduleId: string,
+    currentAttemptCount?: number,
 ): Promise<QuizSubmissionResult> {
     const config = await getQuizConfig()
 
     // ─── Input validation ────────────────────────────────────────────────
-    if (userAnswers.length !== config.expectedAnswerCount) {
+    if (!userAnswers.length) {
         throw new QuizError(
-            `Expected exactly ${config.expectedAnswerCount} answers, received ${userAnswers.length}`,
+            'Answers array cannot be empty',
             ErrorCode.VALIDATION_ERROR,
             enrollmentId,
             dayNumber,
         )
     }
 
-    if (userAnswers.some((a) => !a || a.trim().length === 0)) {
+    if (userAnswers.some((a) => typeof a !== 'number' || a < 0)) {
         throw new QuizError(
-            'All answers must be non-empty strings',
+            'All answers must be non-negative integer indices',
             ErrorCode.VALIDATION_ERROR,
             enrollmentId,
             dayNumber,
@@ -410,27 +379,12 @@ export async function submitQuiz(
         )
     }
 
-    // ─── Calculate score ─────────────────────────────────────────────────
-    const quizScore = calculateQuizScore(userAnswers, correctAnswers)
-    const passed = quizScore.score >= config.passScore
-
-    console.info('[Quiz] Graded:', {
-        enrollmentId,
-        dayNumber,
-        score: quizScore.score,
-        required: config.passScore,
-        passed,
-    })
-
     // ─── Atomic transaction ──────────────────────────────────────────────
     const result = await prisma.$transaction(async (tx) => {
         // Re-read inside transaction for optimistic locking
         const progress = await tx.dailyProgress.findUnique({
             where: {
-                enrollmentId_dayNumber: {
-                    enrollmentId,
-                    dayNumber,
-                },
+                enrollmentId_dayNumber: { enrollmentId, dayNumber },
             },
         })
 
@@ -443,10 +397,19 @@ export async function submitQuiz(
             )
         }
 
-        // Optimistic lock: re-check state hasn't changed since validation
+        // Optimistic lock: client sends currentAttemptCount
+        if (currentAttemptCount !== undefined && currentAttemptCount !== progress.quizAttempts) {
+            throw new QuizError(
+                `Concurrent submission detected. Expected ${progress.quizAttempts} attempts, got ${currentAttemptCount}. Please retry.`,
+                'CONCURRENT_SUBMISSION',
+                enrollmentId,
+                dayNumber,
+            )
+        }
+
         if (progress.quizPassed) {
             throw new QuizError(
-                'Quiz was already passed (concurrent submission detected)',
+                'Quiz was already passed',
                 'ALREADY_PASSED',
                 enrollmentId,
                 dayNumber,
@@ -455,22 +418,59 @@ export async function submitQuiz(
 
         if (progress.isLocked) {
             throw new QuizError(
-                'Day was locked between validation and transaction (concurrent update)',
+                'Day was locked between validation and transaction',
                 'DAY_LOCKED',
                 enrollmentId,
                 dayNumber,
             )
         }
 
+        // ─── Fetch questions from quiz_questions table ───────────────────
+        const quizQuestions = await tx.quizQuestion.findMany({
+            where: { moduleId },
+            orderBy: { orderIndex: 'asc' },
+            select: { correctOptionIndex: true },
+        })
+
+        if (quizQuestions.length === 0) {
+            throw new QuizError(
+                'No quiz questions found for this module',
+                'QUIZ_NOT_FOUND',
+                enrollmentId,
+                dayNumber,
+            )
+        }
+
+        // ─── Validate answer count matches question count ─────────────────
+        if (userAnswers.length !== quizQuestions.length) {
+            throw new QuizError(
+                `Expected ${quizQuestions.length} answers, received ${userAnswers.length}`,
+                ErrorCode.VALIDATION_ERROR,
+                enrollmentId,
+                dayNumber,
+            )
+        }
+
+        // ─── Grade the quiz ──────────────────────────────────────────────
+        const correctAnswers = quizQuestions.map((q) => q.correctOptionIndex)
+        const quizScore = calculateQuizScore(userAnswers, correctAnswers)
+        const passScore = Math.ceil(quizQuestions.length * (config.passPercentage / 100))
+        const passed = quizScore.score >= passScore
+
+        console.info('[Quiz] Graded:', {
+            enrollmentId,
+            dayNumber,
+            score: quizScore.score,
+            passScore,
+            passed,
+        })
+
         const newAttemptCount = progress.quizAttempts + 1
         const now = new Date()
 
         // Calculate cooldown (only on failure, every N attempts)
         let cooldownUntil: Date | null = null
-        if (
-            !passed &&
-            newAttemptCount % config.attemptsBetweenCooldown === 0
-        ) {
+        if (!passed && newAttemptCount % config.attemptsBetweenCooldown === 0) {
             cooldownUntil = new Date(now.getTime() + config.cooldownMinutes * 60 * 1000)
         }
 
@@ -480,7 +480,7 @@ export async function submitQuiz(
             data: {
                 quizAttempted: true,
                 quizScore: quizScore.score,
-                quizAnswers: userAnswers as string[],
+                quizAnswers: userAnswers as number[],
                 quizPassed: passed,
                 quizAttempts: newAttemptCount,
                 quizCooldownUntil: cooldownUntil,
@@ -495,13 +495,9 @@ export async function submitQuiz(
             const nextDay = dayNumber + 1
 
             if (nextDay <= config.totalDays) {
-                // Upsert next day's progress (unlock it)
                 await tx.dailyProgress.upsert({
                     where: {
-                        enrollmentId_dayNumber: {
-                            enrollmentId,
-                            dayNumber: nextDay,
-                        },
+                        enrollmentId_dayNumber: { enrollmentId, dayNumber: nextDay },
                     },
                     create: {
                         enrollmentId,
@@ -514,21 +510,12 @@ export async function submitQuiz(
                         unlockedAt: now,
                     },
                 })
-
                 nextDayUnlocked = true
-
-                console.info('[Quiz] Unlocked next day:', {
-                    enrollmentId,
-                    nextDay,
-                })
             }
 
-            // Update enrollment's current day
             await tx.enrollment.update({
                 where: { id: enrollmentId },
-                data: {
-                    currentDay: Math.min(nextDay, config.totalDays),
-                },
+                data: { currentDay: Math.min(nextDay, config.totalDays) },
             })
 
             // ─── Step 3 (Day 7): Set project submission deadline ─────────
@@ -536,7 +523,6 @@ export async function submitQuiz(
                 const deadline = new Date(
                     now.getTime() + config.submissionDeadlineDays * 24 * 60 * 60 * 1000,
                 )
-
                 await tx.enrollment.update({
                     where: { id: enrollmentId },
                     data: {
@@ -544,46 +530,9 @@ export async function submitQuiz(
                         projectSubmissionDeadline: deadline,
                     },
                 })
-
                 console.info('[Quiz] Day 7 completed — submission deadline set:', {
                     enrollmentId,
                     deadline: deadline.toISOString(),
-                })
-            }
-
-            // ─── Step 4: Create pass notification ────────────────────────
-            const enrollment = await tx.enrollment.findUnique({
-                where: { id: enrollmentId },
-                select: { userId: true },
-            })
-
-            if (enrollment) {
-                await tx.notification.create({
-                    data: {
-                        userId: enrollment.userId,
-                        type: 'quiz_passed',
-                        title: `Day ${dayNumber} Quiz Passed! 🎉`,
-                        message: dayNumber === config.totalDays
-                            ? `Congratulations! You've completed all ${config.totalDays} days. Your project submission window is now open.`
-                            : `Great job! You scored ${quizScore.score}/${quizScore.total}. Day ${dayNumber + 1} is now unlocked.`,
-                    },
-                })
-            }
-        } else if (cooldownUntil) {
-            // ─── Cooldown notification ───────────────────────────────────
-            const enrollment = await tx.enrollment.findUnique({
-                where: { id: enrollmentId },
-                select: { userId: true },
-            })
-
-            if (enrollment) {
-                await tx.notification.create({
-                    data: {
-                        userId: enrollment.userId,
-                        type: 'quiz_cooldown',
-                        title: `Cooldown Active ⏳`,
-                        message: `You've used ${newAttemptCount} attempts on Day ${dayNumber}. Take a ${config.cooldownMinutes}-minute break before retrying.`,
-                    },
                 })
             }
         }

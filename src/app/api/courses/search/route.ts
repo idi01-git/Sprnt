@@ -55,10 +55,16 @@ export async function GET(request: NextRequest) {
             orderBy: { courseName: 'asc' },
         })
 
+        // Convert Decimal fields to numbers for JSON serialization
+        const coursesWithNumbers = courses.map(course => ({
+            ...course,
+            coursePrice: Number(course.coursePrice),
+        }))
+
         return createSuccessResponse({
-            courses,
+            courses: coursesWithNumbers,
             query: q,
-            total: courses.length,
+            total: coursesWithNumbers.length,
         })
     } catch (error) {
         console.error('[GET /api/courses/search]', error)

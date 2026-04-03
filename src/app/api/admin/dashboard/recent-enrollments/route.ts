@@ -45,8 +45,12 @@ export async function GET(_request: NextRequest) {
 
         return createSuccessResponse({
             enrollments: enrollments.map((e) => ({
-                ...e,
-                amountPaid: Number(e.amountPaid),
+                id: e.id,
+                userName: e.user.name,
+                courseName: e.course.courseName,
+                amount: Number(e.amountPaid),
+                createdAt: e.enrolledAt,
+                userEmail: e.user.email,
             })),
         })
     } catch (error) {

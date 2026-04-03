@@ -9,22 +9,43 @@ import StatsLoop from './StatsLoop';
 interface CourseCatalogProps {
   initialCourses?: Course[];
   initialBranches?: Branch[];
+  enrolledCourseIds?: string[];
 }
 
-export function CourseCatalog({ initialCourses, initialBranches }: CourseCatalogProps) {
+export function CourseCatalog({ initialCourses, initialBranches, enrolledCourseIds = [] }: CourseCatalogProps) {
   const [courses, setCourses] = useState<Course[]>(initialCourses || []);
   const [branches, setBranches] = useState<Branch[]>(initialBranches || []);
   const [loading, setLoading] = useState(!initialCourses);
   const [error, setError] = useState('');
-  
+  // Persist enrolled course IDs from server to use during client-side page changes
+  const [enrolledIds, setEnrolledIds] = useState<string[]>(enrolledCourseIds);
+
   const [activeCategory, setActiveCategory] = useState('All');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   const categories = ['All', 'Chemical', 'Civil', 'Mechanical', 'Electrical', 'Electronic', 'CSE/IT'];
 
+  // Filter out enrolled courses - use enrolledIds (persisted from server) for client-side fetches
+  const filteredCourses = enrolledIds.length > 0
+    ? (activeCategory === 'All'
+      ? courses.filter(c => !enrolledIds.includes(c.courseId))
+      : courses.filter(c =>
+          !enrolledIds.includes(c.courseId) &&
+          (c.affiliatedBranch.toLowerCase().includes(activeCategory.toLowerCase().split(' ')[0]) ||
+          activeCategory.toLowerCase().includes(c.affiliatedBranch.toLowerCase()))
+        ))
+    : (activeCategory === 'All'
+      ? courses
+      : courses.filter(course =>
+          course.affiliatedBranch.toLowerCase().includes(activeCategory.toLowerCase().split(' ')[0]) ||
+          activeCategory.toLowerCase().includes(course.affiliatedBranch.toLowerCase())
+        ));
+
   useEffect(() => {
-    if (initialCourses && initialBranches) return;
+    // Only fetch if we don't have initial data - enrolledCourseIds is not a dependency
+    // because it doesn't affect whether we need to fetch; we always use server data first
+    if (initialCourses && initialBranches && initialCourses.length > 0) return;
     
     async function fetchData() {
       setLoading(true);
@@ -53,14 +74,17 @@ export function CourseCatalog({ initialCourses, initialBranches }: CourseCatalog
     }
 
     fetchData();
-  }, [initialCourses, initialBranches]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only on mount - initialCourses and initialBranches are stable from server
 
-  const filteredCourses = activeCategory === 'All'
-    ? courses
-    : courses.filter(course => 
-        course.affiliatedBranch.toLowerCase().includes(activeCategory.toLowerCase().split(' ')[0]) ||
-        activeCategory.toLowerCase().includes(course.affiliatedBranch.toLowerCase())
-      );
+  // Sync enrolledIds when prop changes
+  useEffect(() => {
+    if (enrolledCourseIds.length > 0) {
+      setEnrolledIds(enrolledCourseIds);
+    }
+  }, [enrolledCourseIds]);
+
+
 
   const handleCategoryChange = (category: string) => {
     setActiveCategory(category);

@@ -20,26 +20,32 @@ export async function GET(
     try {
         const { certificateId } = await params
 
-        const certificate = await prisma.certificate.findUnique({
-            where: { certificateId },
+        const enrollment = await prisma.enrollment.findFirst({
+            where: { certificateId, certificateIssued: true },
             select: {
                 certificateId: true,
-                studentName: true,
-                collegeName: true,
-                courseName: true,
-                grade: true,
-                isRevoked: true,
-                revokedAt: true,
-                issuedAt: true,
+                certificateIssued: true,
+                completedAt: true,
+                user: {
+                    select: {
+                        name: true,
+                    },
+                },
                 course: {
                     select: {
+                        courseName: true,
                         affiliatedBranch: true,
+                    },
+                },
+                submission: {
+                    select: {
+                        gradeCategory: true,
                     },
                 },
             },
         })
 
-        if (!certificate) {
+        if (!enrollment) {
             return createErrorResponse(
                 ErrorCode.NOT_FOUND,
                 'Certificate not found. This certificate ID does not exist.',
@@ -47,34 +53,15 @@ export async function GET(
             )
         }
 
-        // Log this verification scan
-        const ip = request.headers.get('x-forwarded-for')
-            ?? request.headers.get('x-real-ip')
-            ?? 'unknown'
-        const userAgent = request.headers.get('user-agent') ?? null
-
-        await prisma.certificateVerification.create({
-            data: {
-                certificateId: certificate.certificateId,
-                ipAddress: ip.split(',')[0].trim(),
-                userAgent,
-            },
-        }).catch(() => {
-            // Non-critical — don't fail the verification if logging fails
-        })
-
         return createSuccessResponse({
-            valid: !certificate.isRevoked,
+            valid: enrollment.certificateIssued,
             certificate: {
-                certificateId: certificate.certificateId,
-                studentName: certificate.studentName,
-                collegeName: certificate.collegeName,
-                courseName: certificate.courseName,
-                branch: certificate.course.affiliatedBranch,
-                grade: certificate.grade,
-                issuedAt: certificate.issuedAt,
-                isRevoked: certificate.isRevoked,
-                revokedAt: certificate.revokedAt,
+                certificateId: enrollment.certificateId,
+                studentName: enrollment.user.name,
+                courseName: enrollment.course.courseName,
+                branch: enrollment.course.affiliatedBranch,
+                grade: enrollment.submission?.gradeCategory,
+                issuedAt: enrollment.completedAt,
             },
         })
     } catch (error) {

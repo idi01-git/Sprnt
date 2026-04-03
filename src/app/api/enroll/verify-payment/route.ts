@@ -11,6 +11,8 @@ import {
     ErrorCode,
 } from '@/lib/api-response'
 
+const REFERRAL_AMOUNT = 50
+
 /**
  * POST /api/enroll/verify-payment
  * Client-side payment verification: validate Razorpay signature,
@@ -66,6 +68,13 @@ export async function POST(request: NextRequest) {
             },
         })
 
+        // Get actual module count for this course to create correct number of dailyProgress records
+        const courseWithModules = await prisma.course.findUnique({
+            where: { id: enrollment!.courseId },
+            select: { _count: { select: { modules: true } } },
+        })
+        const moduleCount = courseWithModules?._count.modules || 7
+
         if (!enrollment) {
             return createErrorResponse(
                 ErrorCode.ENROLLMENT_NOT_FOUND,
@@ -103,8 +112,8 @@ export async function POST(request: NextRequest) {
                 },
             })
 
-            // Initialize all 7 days progress (Day 1 unlocked, Days 2-7 locked)
-            const records = Array.from({ length: 7 }, (_, i) => ({
+            // Initialize daily progress based on actual module count (Day 1 unlocked, rest locked)
+            const records = Array.from({ length: moduleCount }, (_, i) => ({
                 enrollmentId: enrollment.id,
                 dayNumber: i + 1,
                 isLocked: i !== 0, // Day 1 is unlocked, rest are locked
@@ -152,6 +161,61 @@ export async function POST(request: NextRequest) {
                         data: { usageCount: { increment: 1 } },
                     })
                 }
+            }
+
+            // Credit referral bonus to referrer if this user was referred
+            const refereeUser = await tx.user.findUnique({
+                where: { id: enrollment.userId },
+                select: { referredBy: true, email: true },
+            })
+
+            console.info('[POST /api/enroll/verify-payment] Checking referral:', {
+                userId: enrollment.userId,
+                userEmail: refereeUser?.email,
+                referredBy: refereeUser?.referredBy,
+            })
+
+            if (refereeUser?.referredBy) {
+                // Check if referral already exists for this referee (idempotency)
+                const existingReferral = await tx.referral.findFirst({
+                    where: { refereeId: enrollment.userId },
+                })
+
+                if (existingReferral) {
+                    console.info('[POST /api/enroll/verify-payment] Referral already exists, skipping:', existingReferral.id);
+                } else {
+                    // Get the referrer's referral code
+                    const referrer = await tx.user.findUnique({
+                        where: { id: refereeUser.referredBy },
+                        select: { referralCode: true, email: true },
+                    })
+
+                    const referralCodeUsed = referrer?.referralCode || ''
+                    const autoApproveAt = new Date()
+                    autoApproveAt.setDate(autoApproveAt.getDate() + 7)
+
+                    await tx.referral.create({
+                        data: {
+                            referrerId: refereeUser.referredBy,
+                            refereeId: enrollment.userId,
+                            referralCodeUsed,
+                            status: 'pending',
+                            amount: REFERRAL_AMOUNT,
+                            autoApproveAt,
+                        },
+                    })
+
+                    console.info('[POST /api/enroll/verify-payment] Referral credited:', {
+                        referrerId: refereeUser.referredBy,
+                        referrerEmail: referrer?.email,
+                        refereeId: enrollment.userId,
+                        refereeEmail: refereeUser?.email,
+                        referralCodeUsed,
+                        amount: REFERRAL_AMOUNT,
+                    })
+                }
+            } else {
+                console.info('[POST /api/enroll/verify-payment] No referral to credit - user has no referrer');
             }
         })
 

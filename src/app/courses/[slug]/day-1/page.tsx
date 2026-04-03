@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  Play,
-  FileText,
   Download,
   CheckCircle2,
   XCircle,
@@ -15,6 +13,7 @@ import {
   ArrowLeft,
   BookOpen
 } from 'lucide-react';
+import { VideoPlayer } from '@/components/video/VideoPlayer';
 
 const poppins: React.CSSProperties = { fontFamily: "'Poppins', sans-serif" };
 const outfit: React.CSSProperties = { fontFamily: "'Outfit', sans-serif" };
@@ -23,6 +22,7 @@ interface QuizQuestion {
   id: number;
   question: string;
   options: string[];
+  correctOptionIndex: number;
 }
 
 interface Day1Content {
@@ -36,6 +36,7 @@ interface Day1Content {
   quiz: {
     questions: QuizQuestion[];
     passingScore: number;
+    totalQuestions: number;
   } | null;
 }
 
@@ -53,7 +54,7 @@ export default function Day1PreviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quizMode, setQuizMode] = useState(false);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answers, setAnswers] = useState<Record<number, number>>({});
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [currentQ, setCurrentQ] = useState(0);
 
@@ -72,7 +73,7 @@ export default function Day1PreviewPage() {
         } else {
           setError(json.error?.message || 'Failed to load Day 1 content');
         }
-      } catch (err) {
+      } catch {
         setError('Something went wrong');
       } finally {
         setLoading(false);
@@ -81,26 +82,24 @@ export default function Day1PreviewPage() {
     fetchDay1();
   }, [slug]);
 
-  const handleAnswer = (questionId: number, option: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: option }));
+  const handleAnswer = (questionId: number, optionIndex: number) => {
+    setAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
   };
 
   const handleQuizSubmit = () => {
     if (!content?.quiz) return;
     
-    const allAnswered = content.quiz.questions.every(q => answers[q.id]);
+    const allAnswered = content.quiz.questions.every(q => answers[q.id] !== undefined);
     if (!allAnswered) return;
 
-    const correctAnswers = content.quiz.questions.reduce((count, q, idx) => {
-      const selectedOption = answers[q.id];
-      const correctOption = content.quiz!.questions[idx].options[0];
-      return count + (selectedOption === correctOption ? 1 : 0);
+    const correctCount = content.quiz.questions.reduce((count, q) => {
+      return count + (answers[q.id] === q.correctOptionIndex ? 1 : 0);
     }, 0);
 
-    const passed = correctAnswers >= content.quiz.passingScore;
+    const passed = correctCount >= content.quiz.passingScore;
     
     setQuizResult({
-      score: correctAnswers,
+      score: correctCount,
       passed,
       totalQuestions: content.quiz.questions.length
     });
@@ -197,11 +196,8 @@ export default function Day1PreviewPage() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Video Section */}
         {content.videoUrl && (
-          <div className="bg-gray-900 rounded-2xl overflow-hidden aspect-video flex items-center justify-center mb-8">
-            <div className="text-center text-white/70">
-              <Play className="w-16 h-16 mx-auto mb-3" />
-              <p className="text-sm" style={poppins}>Video Lecture</p>
-            </div>
+          <div className="mb-8">
+            <VideoPlayer videoUrl={content.videoUrl} title={content.title} className="w-full" />
           </div>
         )}
 
@@ -292,10 +288,10 @@ function Day1QuizMode({
   courseSlug
 }: {
   content: Day1Content;
-  answers: Record<number, string>;
+  answers: Record<number, number>;
   quizResult: QuizResult | null;
   currentQ: number;
-  onAnswer: (qId: number, option: string) => void;
+  onAnswer: (qId: number, optionIndex: number) => void;
   onSubmit: () => void;
   onBack: () => void;
   onQuestionChange: (q: number) => void;
@@ -374,7 +370,7 @@ function Day1QuizMode({
   }
 
   const q = content.quiz.questions[currentQ];
-  const allAnswered = content.quiz.questions.every(q => answers[q.id]);
+  const allAnswered = content.quiz.questions.every(q => answers[q.id] !== undefined);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 pb-16 px-6">
@@ -403,7 +399,7 @@ function Day1QuizMode({
               className={`flex-1 h-2 rounded-full transition-all ${
                 i === currentQ
                   ? 'bg-purple-600'
-                  : answers[content.quiz!.questions[i].id]
+                  : answers[content.quiz!.questions[i].id] !== undefined
                     ? 'bg-green-400'
                     : 'bg-gray-200'
               }`}
@@ -423,11 +419,11 @@ function Day1QuizMode({
 
           <div className="space-y-3">
             {q.options.map((option, i) => {
-              const isSelected = answers[q.id] === option;
+              const isSelected = answers[q.id] === i;
               return (
                 <button
                   key={i}
-                  onClick={() => onAnswer(q.id, option)}
+                  onClick={() => onAnswer(q.id, i)}
                   className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all ${
                     isSelected
                       ? 'border-purple-500 bg-purple-50 text-purple-900'

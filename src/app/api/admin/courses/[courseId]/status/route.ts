@@ -2,14 +2,16 @@ import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
 import {
     createSuccessResponse,
+    createErrorResponse,
     badRequest,
     notFound,
     conflict,
     serverError,
     HttpStatus,
+    ErrorCode,
 } from '@/lib/api-response'
 import { adminCourseStatusSchema } from '@/lib/validations/admin'
-import { del, CACHE_KEYS } from '@/lib/cache'
+import { del, delPattern, CACHE_KEYS } from '@/lib/cache'
 
 // =============================================================================
 // PATCH /api/admin/courses/{courseId}/status — Toggle is_active
@@ -45,13 +47,18 @@ export async function PATCH(
             data: { isActive: parsed.data.isActive },
         })
 
-        del(CACHE_KEYS.COURSES_LIST)
+        // Delete all course list caches (keys have suffixes for branch/search/sort/page/limit)
+        delPattern(CACHE_KEYS.COURSES_LIST)
         del(CACHE_KEYS.COURSES_BRANCHES)
 
         return createSuccessResponse(updated)
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(
+                ErrorCode.ADMIN_AUTH_REQUIRED,
+                'Admin authentication required',
+                HttpStatus.UNAUTHORIZED
+            )
         }
         console.error('[PATCH /api/admin/courses/[courseId]/status]', error)
         return serverError()

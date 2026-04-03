@@ -8,7 +8,6 @@ import {
     HttpStatus,
     ErrorCode,
 } from '@/lib/api-response'
-import { generatePresignedDownloadUrl, Bucket, Expiry } from '@/lib/r2'
 
 export async function GET(
     _request: NextRequest,
@@ -96,7 +95,7 @@ export async function GET(
                     dayNumber,
                 },
             },
-            select: { notesPdfUrl: true, notesR2Key: true, title: true },
+            select: { notesPdfUrl: true, title: true },
         })
 
         if (!courseModule) {
@@ -107,7 +106,7 @@ export async function GET(
             )
         }
 
-        if (!courseModule.notesR2Key && !courseModule.notesPdfUrl) {
+        if (!courseModule.notesPdfUrl) {
             return createErrorResponse(
                 ErrorCode.NOT_FOUND,
                 `Notes not available for Day ${dayNumber}`,
@@ -115,26 +114,10 @@ export async function GET(
             )
         }
 
-        if (courseModule.notesR2Key) {
-            const { url, expiresAt } = await generatePresignedDownloadUrl(
-                Bucket.PRIVATE,
-                courseModule.notesR2Key,
-                Expiry.DOWNLOAD
-            )
-
-            return createSuccessResponse({
-                dayNumber,
-                title: courseModule.title,
-                notesUrl: url,
-                expiresAt,
-                isSecure: true,
-            })
-        }
-
         return createSuccessResponse({
             dayNumber,
             title: courseModule.title,
-            notesPdfUrl: courseModule.notesPdfUrl,
+            notesUrl: courseModule.notesPdfUrl,
             isSecure: false,
         })
     } catch (error) {

@@ -24,7 +24,7 @@ export async function GET(
         const { page, limit } = parsed.data
         const skip = (page - 1) * limit
 
-        const where = { userId }
+        const where = { userId, deletedAt: null }
 
         const [enrollments, total] = await Promise.all([
             prisma.enrollment.findMany({
@@ -38,6 +38,9 @@ export async function GET(
                             courseName: true,
                             slug: true,
                             courseId: true,
+                            _count: {
+                                select: { modules: true },
+                            },
                         }
                     }
                 }
@@ -45,7 +48,22 @@ export async function GET(
             prisma.enrollment.count({ where }),
         ])
 
-        return createPaginatedResponse(enrollments, { total, page, pageSize: limit })
+        // Format enrollments to match what the admin UI expects
+        const formattedEnrollments = enrollments.map(e => ({
+            id: e.id,
+            courseName: e.course.courseName,
+            courseSlug: e.course.slug,
+            courseId: e.course.courseId,
+            currentDay: e.currentDay,
+            totalDays: e.course._count.modules > 0 ? e.course._count.modules : 7,
+            status: e.completedAt ? 'completed' : e.paymentStatus === 'failed' ? 'failed' : 'in_progress',
+            enrolledAt: e.enrolledAt.toISOString(),
+            completedAt: e.completedAt?.toISOString() ?? null,
+            paymentStatus: e.paymentStatus,
+            amountPaid: Number(e.amountPaid),
+        }))
+
+        return createPaginatedResponse(formattedEnrollments, { total, page, pageSize: limit })
     } catch (error) {
         if (error instanceof AuthError) {
             return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)

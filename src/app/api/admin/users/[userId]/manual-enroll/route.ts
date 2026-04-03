@@ -23,7 +23,10 @@ export async function POST(
         const user = await prisma.user.findUnique({ where: { id: userId } })
         if (!user) return notFound('User')
 
-        const course = await prisma.course.findUnique({ where: { courseId: parsed.data.courseId } })
+        const course = await prisma.course.findUnique({ 
+            where: { courseId: parsed.data.courseId },
+            select: { id: true, _count: { select: { modules: true } } },
+        })
         if (!course) return notFound('Course')
 
         const existingEnrollment = await prisma.enrollment.findUnique({
@@ -39,16 +42,35 @@ export async function POST(
             return conflict('User is already enrolled in this course')
         }
 
-        const enrollment = await prisma.enrollment.create({
-            data: {
-                userId,
-                courseId: course.id,
-                paymentStatus: 'success',
-                amountPaid: 0,
-                isAdminGranted: true,
-                adminGrantedBy: adminId,
-                adminGrantReason: parsed.data.reason,
-            }
+        const moduleCount = course._count.modules || 7
+
+        // Create enrollment with dailyProgress in a transaction
+        const enrollment = await prisma.$transaction(async (tx) => {
+            const newEnrollment = await tx.enrollment.create({
+                data: {
+                    userId,
+                    courseId: course.id,
+                    paymentStatus: 'success',
+                    amountPaid: 0,
+                    isAdminGranted: true,
+                    adminGrantedBy: adminId,
+                    adminGrantReason: parsed.data.reason,
+                }
+            })
+
+            // Create dailyProgress records based on actual module count
+            const records = Array.from({ length: moduleCount }, (_, i) => ({
+                enrollmentId: newEnrollment.id,
+                dayNumber: i + 1,
+                isLocked: i !== 0,
+                unlockedAt: i === 0 ? new Date() : null,
+            }))
+            await tx.dailyProgress.createMany({
+                data: records,
+                skipDuplicates: true,
+            })
+
+            return newEnrollment
         })
 
         await logAdminAction(adminId, 'user_manual_enroll', 'enrollment', enrollment.id, { courseId: course.id, reason: parsed.data.reason })

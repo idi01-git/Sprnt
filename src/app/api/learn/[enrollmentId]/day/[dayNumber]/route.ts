@@ -9,6 +9,18 @@ import {
     ErrorCode,
 } from '@/lib/api-response'
 
+function extractYouTubeId(url: string | null): string | null {
+    if (!url) return null
+    const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    ]
+    for (const pattern of patterns) {
+        const match = url.match(pattern)
+        if (match) return match[1]
+    }
+    return null
+}
+
 /**
  * GET /api/learn/{enrollmentId}/day/{dayNumber}
  * Get day content: module info, video assets, quiz availability, lock status.
@@ -116,16 +128,7 @@ export async function GET(
                 contentText: true,
                 isFreePreview: true,
                 notesPdfUrl: true,
-                videoAssets: {
-                    where: { uploadStatus: 'completed' },
-                    select: {
-                        id: true,
-                        cdnUrl: true,
-                        durationSeconds: true,
-                        resolution: true,
-                    },
-                    take: 1,
-                },
+                youtubeUrl: true,
             },
         })
 
@@ -135,28 +138,6 @@ export async function GET(
                 `Day ${dayNumber} content not found for this course`,
                 HttpStatus.NOT_FOUND
             )
-        }
-
-        const videoAsset = courseModule.videoAssets[0] ?? null
-
-        // Get video view progress if video exists
-        let videoProgress = null
-        if (videoAsset) {
-            videoProgress = await prisma.videoView.findUnique({
-                where: {
-                    userId_videoAssetId_enrollmentId: {
-                        userId: user.id,
-                        videoAssetId: videoAsset.id,
-                        enrollmentId: enrollment.id,
-                    },
-                },
-                select: {
-                    watchDurationSeconds: true,
-                    completionPercentage: true,
-                    lastPositionSeconds: true,
-                    completed: true,
-                },
-            })
         }
 
         // Mark day as started if not already
@@ -182,6 +163,10 @@ export async function GET(
             })
         }
 
+        const youtubeVideoId = courseModule.youtubeUrl
+            ? extractYouTubeId(courseModule.youtubeUrl)
+            : null
+
         return createSuccessResponse({
             day: {
                 dayNumber: courseModule.dayNumber,
@@ -189,21 +174,13 @@ export async function GET(
                 description: courseModule.contentText,
                 moduleId: courseModule.id,
                 notesPdfUrl: courseModule.notesPdfUrl,
-                video: videoAsset
-                    ? {
-                        id: videoAsset.id,
-                        durationSeconds: videoAsset.durationSeconds,
-                        resolution: videoAsset.resolution,
-                        progress: videoProgress
-                            ? {
-                                watchDurationSeconds: videoProgress.watchDurationSeconds,
-                                completionPercentage: Number(videoProgress.completionPercentage),
-                                lastPositionSeconds: videoProgress.lastPositionSeconds,
-                                completed: videoProgress.completed,
-                            }
-                            : null,
-                    }
+                youtubeUrl: courseModule.youtubeUrl,
+                videoUrl: youtubeVideoId
+                    ? `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?rel=0&modestbranding=1&iv_load_policy=3&fs=1`
                     : null,
+                resources: courseModule.notesPdfUrl
+                    ? [{ title: `Day ${dayNumber} Notes`, url: courseModule.notesPdfUrl }]
+                    : [],
                 quiz: {
                     attempted: progress?.quizAttempted ?? false,
                     passed: progress?.quizPassed ?? false,

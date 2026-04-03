@@ -112,7 +112,7 @@ export function Timeline() {
         <div className="text-center mb-16 animate-fade-in">
           <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full mb-6 relative group">
             {/* Enhanced Glassmorphic Badge with Neon */}
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-xl rounded-full border border-purple-300/50"
+            <div className="absolute inset-0 bg-linear-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-xl rounded-full border border-purple-300/50"
               style={{ boxShadow: '0 4px 16px rgba(139, 92, 246, 0.1), inset 0 0 15px rgba(139, 92, 246, 0.03)' }}
             />
             <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
@@ -120,7 +120,7 @@ export function Timeline() {
             />
             <Calendar className="w-5 h-5 text-purple-600 relative z-10" />
             <span
-              className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent relative z-10"
+              className="bg-linear-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent relative z-10"
               style={{
                 fontFamily: "'Poppins', sans-serif",
                 fontWeight: 700,
@@ -133,7 +133,7 @@ export function Timeline() {
           </div>
 
           <h2
-            className="bg-gradient-to-r from-purple-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-4"
+            className="bg-linear-to-r from-purple-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-4"
             style={{
               fontFamily: "'Outfit', sans-serif",
               fontWeight: 800,
@@ -176,15 +176,15 @@ export function Timeline() {
               >
                 {/* Enhanced 3D Shadow with smooth motion */}
                 <div
-                  className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-10 rounded-3xl transform translate-y-0 translate-x-0 group-hover:translate-y-1 group-hover:translate-x-1 transition-all duration-100 ease-out blur-sm`}
+                  className={`absolute inset-0 bg-linear-to-br ${item.color} opacity-10 rounded-3xl transform translate-y-0 translate-x-0 group-hover:translate-y-1 group-hover:translate-x-1 transition-all duration-100 ease-out blur-sm`}
                 />
 
                 {/* Multi-layer Neon Glow */}
                 <div
-                  className={`absolute -inset-2 rounded-3xl bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-20 blur-2xl transition-all duration-700 ease-out`}
+                  className={`absolute -inset-2 rounded-3xl bg-linear-to-br ${item.color} opacity-0 group-hover:opacity-20 blur-2xl transition-all duration-700 ease-out`}
                 />
                 <div
-                  className={`absolute -inset-1 rounded-3xl bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-30 blur-xl transition-all duration-500 ease-out`}
+                  className={`absolute -inset-1 rounded-3xl bg-linear-to-br ${item.color} opacity-0 group-hover:opacity-30 blur-xl transition-all duration-500 ease-out`}
                 />
 
                 {/* Enhanced Glassmorphic Card */}
@@ -201,15 +201,15 @@ export function Timeline() {
                   }}
                 >
                   {/* Enhanced Shine Effect - Diagonal sweep */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/60 to-white/0 transform -translate-x-full -translate-y-full group-hover:translate-x-full group-hover:translate-y-full transition-transform duration-1000 ease-out"
+                  <div className="absolute inset-0 bg-linear-to-br from-white/0 via-white/60 to-white/0 transform -translate-x-full -translate-y-full group-hover:translate-x-full group-hover:translate-y-full transition-transform duration-1000 ease-out"
                     style={{ transform: 'rotate(-10deg) scale(2)' }}
                   />
 
                   {/* Gradient Top Border with Neon pulse */}
                   <div
-                    className={`h-1.5 bg-gradient-to-r ${item.color} relative overflow-hidden`}
+                    className={`h-1.5 bg-linear-to-r ${item.color} relative overflow-hidden`}
                   >
-                    <div className={`absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out`} />
+                    <div className={`absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out`} />
                     {isHovered && (
                       <div className="absolute inset-0 animate-pulse"
                         style={{ boxShadow: `0 0 20px rgba(139, 92, 246, 0.8), 0 0 40px rgba(139, 92, 246, 0.4)` }}
@@ -222,7 +222,7 @@ export function Timeline() {
                     <div className="flex items-center justify-between mb-6">
                       {/* Enhanced 3D Icon */}
                       <div
-                        className={`relative w-16 h-16 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center transition-all duration-500 ease-out`}
+                        className={`relative w-16 h-16 rounded-2xl bg-linear-to-br ${item.color} flex items-center justify-center transition-all duration-500 ease-out`}
                         style={{
                           boxShadow: isHovered
                             ? '0 8px 20px rgba(139, 92, 246, 0.25), inset 0 -4px 8px rgba(0, 0, 0, 0.15), 0 0 0 2px rgba(255, 255, 255, 0.2)'
@@ -244,7 +244,7 @@ export function Timeline() {
                         style={{ boxShadow: '0 2px 8px rgba(139, 92, 246, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8)' }}
                       >
                         <span
-                          className={`bg-gradient-to-r ${item.color} bg-clip-text text-transparent`}
+                          className={`bg-linear-to-r ${item.color} bg-clip-text text-transparent`}
                           style={{
                             fontFamily: "'Poppins', sans-serif",
                             fontWeight: 700,
@@ -276,7 +276,7 @@ export function Timeline() {
 
                     {/* Title with smooth color transition */}
                     <h3
-                      className={`text-gray-900 mb-3 transition-all duration-500 ${isHovered ? 'bg-gradient-to-r ' + item.color + ' bg-clip-text text-transparent' : ''}`}
+                      className={`text-gray-900 mb-3 transition-all duration-500 ${isHovered ? 'bg-linear-to-r ' + item.color + ' bg-clip-text text-transparent' : ''}`}
                       style={{
                         fontFamily: "'Outfit', sans-serif",
                         fontWeight: 700,
@@ -312,7 +312,7 @@ export function Timeline() {
                             transitionDelay: `${actIdx * 50}ms`
                           }}
                         >
-                          <div className={`flex-shrink-0 w-5 h-5 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center mt-0.5 transition-all duration-300`}
+                          <div className={`shrink-0 w-5 h-5 rounded-lg bg-linear-to-br ${item.color} flex items-center justify-center mt-0.5 transition-all duration-300`}
                             style={{
                               boxShadow: isHovered ? `0 2px 6px rgba(139, 92, 246, 0.25)` : '0 1px 4px rgba(139, 92, 246, 0.15)',
                               transform: isHovered ? 'scale(1.1) rotate(3deg)' : 'scale(1) rotate(0deg)'
@@ -337,7 +337,7 @@ export function Timeline() {
                   </div>
 
                   {/* Decorative Corner Gradient with pulse */}
-                  <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${item.color} rounded-bl-full transition-opacity duration-500`}
+                  <div className={`absolute top-0 right-0 w-32 h-32 bg-linear-to-br ${item.color} rounded-bl-full transition-opacity duration-500`}
                     style={{ opacity: isHovered ? 0.1 : 0.05 }}
                   />
                 </div>
@@ -365,16 +365,16 @@ export function Timeline() {
             />
 
             {/* Enhanced Glassmorphic Container */}
-            <div className="relative backdrop-blur-2xl rounded-3xl p-8 md:p-10 border border-white/50 bg-gradient-to-br from-white/90 to-white/70 group-hover:from-white/95 group-hover:to-white/85 transition-all duration-500"
+            <div className="relative backdrop-blur-2xl rounded-3xl p-8 md:p-10 border border-white/50 bg-linear-to-br from-white/90 to-white/70 group-hover:from-white/95 group-hover:to-white/85 transition-all duration-500"
               style={{
                 boxShadow: '0 10px 30px rgba(139, 92, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 0 20px rgba(255, 255, 255, 0.3)'
               }}
             >
               {/* Animated background shine */}
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-3xl" />
+              <div className="absolute inset-0 bg-linear-to-br from-purple-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-3xl" />
 
               <h3
-                className="bg-gradient-to-r from-purple-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-3 relative"
+                className="bg-linear-to-r from-purple-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-3 relative"
                 style={{
                   fontFamily: "'Outfit', sans-serif",
                   fontWeight: 700,
@@ -413,16 +413,16 @@ export function Timeline() {
                 className="relative group/btn inline-block"
               >
                 {/* 3D Shadow layers */}
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-800 to-blue-800 rounded-2xl transform translate-y-1 translate-x-1 group-hover/btn:translate-y-2 group-hover/btn:translate-x-2 transition-all duration-300 ease-out" />
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-blue-700 rounded-2xl transform translate-y-0.5 translate-x-0.5 opacity-50" />
+                <div className="absolute inset-0 bg-linear-to-r from-purple-800 to-blue-800 rounded-2xl transform translate-y-1 translate-x-1 group-hover/btn:translate-y-2 group-hover/btn:translate-x-2 transition-all duration-300 ease-out" />
+                <div className="absolute inset-0 bg-linear-to-r from-purple-700 to-blue-700 rounded-2xl transform translate-y-0.5 translate-x-0.5 opacity-50" />
 
                 {/* Button */}
-                <div className="relative px-10 py-5 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 overflow-hidden group-hover/btn:-translate-y-1 group-hover/btn:-translate-x-1 group-hover/btn:scale-105 transition-all duration-300 ease-out"
+                <div className="relative px-10 py-5 rounded-2xl bg-linear-to-r from-purple-600 via-violet-600 to-blue-600 overflow-hidden group-hover/btn:-translate-y-1 group-hover/btn:-translate-x-1 group-hover/btn:scale-105 transition-all duration-300 ease-out"
                   style={{ boxShadow: '0 4px 16px rgba(139, 92, 246, 0.25), inset 0 -2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2)' }}
                 >
                   {/* Animated Shine - Multiple layers */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent transform -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out" />
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-50" />
+                  <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/40 to-transparent transform -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000 ease-out" />
+                  <div className="absolute inset-0 bg-linear-to-br from-white/20 via-transparent to-transparent opacity-50" />
 
                   <span
                     className="relative flex items-center gap-3 text-white"

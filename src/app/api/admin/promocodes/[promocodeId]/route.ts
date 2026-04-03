@@ -21,7 +21,7 @@ export async function GET(
             },
             include: {
                 _count: { select: { usages: true } },
-                creator: { select: { username: true } },
+                creator: { select: { email: true } },
             }
         })
 

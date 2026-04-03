@@ -1,69 +1,60 @@
 import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
-import { createSuccessResponse, createPaginatedResponse, badRequest, serverError, HttpStatus } from '@/lib/api-response'
-import { adminCertificateListQuerySchema } from '@/lib/validations/admin'
-import type { Prisma } from '@/generated/prisma/client'
+import { createSuccessResponse, createErrorResponse, serverError, HttpStatus } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
+export async function GET() {
     try {
         await requireAdminOrAbove()
 
-        const { searchParams } = new URL(request.url)
-        const queryParams = Object.fromEntries(searchParams.entries())
-        const parsed = adminCertificateListQuerySchema.safeParse(queryParams)
+        const certificates = await prisma.enrollment.findMany({
+            where: {
+                certificateIssued: true,
+                certificateId: { not: null },
+            },
+            select: {
+                id: true,
+                certificateId: true,
+                certificateIssued: true,
+                enrolledAt: true,
+                completedAt: true,
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
+                course: {
+                    select: {
+                        courseId: true,
+                        courseName: true,
+                        affiliatedBranch: true,
+                    },
+                },
+            },
+            orderBy: { completedAt: 'desc' },
+        })
 
-        if (!parsed.success) {
-            return badRequest('Invalid query parameters', { errors: parsed.error.flatten().fieldErrors })
-        }
+        const items = certificates.map(c => ({
+            id: c.id,
+            certificateId: c.certificateId || 'N/A',
+            studentName: c.user.name,
+            studentEmail: c.user.email,
+            courseName: c.course.courseName,
+            courseId: c.course.courseId,
+            branch: c.course.affiliatedBranch,
+            issueDate: c.completedAt?.toISOString() || c.enrolledAt.toISOString(),
+            enrolledAt: c.enrolledAt.toISOString(),
+        }))
 
-        const { search, status, courseId, page, limit, sort } = parsed.data
-        const skip = (page - 1) * limit
-
-        const where: Prisma.CertificateWhereInput = {}
-
-        if (status === 'valid') {
-            where.isRevoked = false
-        } else if (status === 'revoked') {
-            where.isRevoked = true
-        }
-
-        if (search) {
-            where.OR = [
-                { studentName: { contains: search, mode: 'insensitive' } },
-                { courseName: { contains: search, mode: 'insensitive' } },
-                { certificateId: { contains: search, mode: 'insensitive' } },
-            ]
-        }
-
-        if (courseId) {
-            where.courseId = courseId
-        }
-
-        let orderBy: Prisma.CertificateOrderByWithRelationInput = { issuedAt: 'desc' }
-        if (sort === 'oldest') {
-            orderBy = { issuedAt: 'asc' }
-        } else if (sort === 'name') {
-            orderBy = { studentName: 'asc' }
-        }
-
-        const [certificates, total] = await Promise.all([
-            prisma.certificate.findMany({
-                where,
-                skip,
-                take: limit,
-                orderBy,
-            }),
-            prisma.certificate.count({ where }),
-        ])
-
-        return createPaginatedResponse(certificates, { total, page, pageSize: limit })
+        return createSuccessResponse({ certificates: items })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse('ADMIN_AUTH_REQUIRED', 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/certificates]', error)
-        return serverError()
+        return serverError('Failed to fetch certificates')
     }
 }

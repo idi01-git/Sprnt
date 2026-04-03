@@ -42,7 +42,14 @@ export default function BuyButton({ courseId, courseName, coursePrice, slug }: B
         setPromoError(null);
         setPromoApplied(null);
         try {
-            const res = await fetchApi<{ valid: boolean; discount: number; message: string }>(
+            const res = await fetchApi<{
+                valid: boolean;
+                discountAmount: number;
+                discountType: string;
+                originalPrice: number;
+                finalAmount: number;
+                message?: string;
+            }>(
                 '/api/promocode/validate',
                 {
                     method: 'POST',
@@ -50,9 +57,12 @@ export default function BuyButton({ courseId, courseName, coursePrice, slug }: B
                 }
             );
             if (res.success && res.data?.valid) {
-                setPromoApplied({ code: promoCode.trim().toUpperCase(), discount: res.data.discount });
+                setPromoApplied({
+                    code: promoCode.trim().toUpperCase(),
+                    discount: res.data.discountAmount,
+                });
             } else {
-                setPromoError(res.data?.message || res.error?.message || 'Invalid promo code');
+                setPromoError(res.error?.message || res.data?.message || 'Invalid promo code');
             }
         } catch {
             setPromoError('Failed to validate promo code');
@@ -72,6 +82,9 @@ export default function BuyButton({ courseId, courseName, coursePrice, slug }: B
                 amount: number;
                 currency: string;
                 keyId: string;
+                userName: string | null;
+                userEmail: string | null;
+                userPhone: string | null;
             }>('/api/enroll/create-order', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -82,14 +95,14 @@ export default function BuyButton({ courseId, courseName, coursePrice, slug }: B
 
             if (!orderRes.success || !orderRes.data) {
                 if (orderRes.error?.code === 'AUTH_REQUIRED' || orderRes.error?.code === 'UNAUTHORIZED') {
-                    // Not logged in — redirect to dashboard to trigger auth modal
-                    router.push(`/dashboard?redirect=/courses/${slug}`);
+                    // Not logged in — redirect to login page with return URL
+                    router.push(`/login?redirect=/courses/${slug}`);
                     return;
                 }
                 throw new Error(orderRes.error?.message || 'Failed to create order');
             }
 
-            const { orderId, amount, currency, keyId } = orderRes.data;
+            const { orderId, amount, currency, keyId, userName, userEmail, userPhone } = orderRes.data;
 
             // 2. Open Razorpay
             if (!window.Razorpay) {
@@ -103,7 +116,11 @@ export default function BuyButton({ courseId, courseName, coursePrice, slug }: B
                 name: 'Sprintern',
                 description: courseName,
                 order_id: orderId,
-                prefill: {},
+                prefill: {
+                    name: userName || '',
+                    email: userEmail || '',
+                    contact: userPhone || '',
+                },
                 theme: { color: '#9333ea' },
                 modal: {
                     ondismiss: () => setLoading(false),
@@ -136,7 +153,31 @@ export default function BuyButton({ courseId, courseName, coursePrice, slug }: B
             });
 
             rzp.on('payment.failed', (resp: any) => {
-                setError(`Payment failed: ${resp.error?.description || 'Unknown error'}`);
+                // Log the ENTIRE response to debug
+                console.error('[Razorpay Payment Failed]', {
+                    resp,
+                    errorKeys: resp.error ? Object.keys(resp.error) : 'no error object',
+                    errorString: JSON.stringify(resp.error),
+                });
+                
+                // Handle various Razorpay error structures
+                let errorMsg = 'Payment failed. Please try again.';
+                if (resp.error) {
+                    if (resp.error.description) {
+                        errorMsg = resp.error.description;
+                    } else if (resp.error.reason) {
+                        errorMsg = resp.error.reason;
+                    } else if (resp.error.message) {
+                        errorMsg = resp.error.message;
+                    } else if (resp.error.code) {
+                        errorMsg = `Error (${resp.error.code}): Payment was declined`;
+                    } else if (typeof resp.error === 'object' && Object.keys(resp.error).length === 0) {
+                        errorMsg = 'Payment was declined by your bank. Please try a different payment method or card.';
+                    }
+                } else {
+                    errorMsg = 'Payment failed. No response from payment gateway.';
+                }
+                setError(errorMsg);
                 setLoading(false);
             });
 

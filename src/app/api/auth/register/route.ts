@@ -49,12 +49,15 @@ export async function POST(request: Request) {
         // 3. Validate referral code if provided
         let referredByUserId: string | undefined
         if (referralCode) {
+            console.info('[POST /api/auth/register] Referral code received:', referralCode);
             const referrer = await prisma.user.findUnique({
                 where: { referralCode },
-                select: { id: true, referralCodeActive: true },
+                select: { id: true, email: true, referralCode: true },
             })
 
-            if (!referrer || !referrer.referralCodeActive) {
+            console.info('[POST /api/auth/register] Referrer lookup result:', referrer);
+
+            if (!referrer) {
                 return createErrorResponse(
                     ErrorCode.VALIDATION_ERROR,
                     'Invalid or inactive referral code',
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
             }
 
             referredByUserId = referrer.id
+            console.info('[POST /api/auth/register] Setting referredBy:', { referrerId: referrer.id, referrerEmail: referrer.email });
         }
 
         // 4. Hash password with Argon2
@@ -89,24 +93,8 @@ export async function POST(request: Request) {
             },
         })
 
-        // 6. Generate email verification token (24-hour expiry) and send emails
-        const rawVerifyToken = randomBytes(32).toString('hex')
-        const verifyTokenHash = createHash('sha256').update(rawVerifyToken).digest('hex')
-
-        await prisma.authToken.create({
-            data: {
-                userId: user.id,
-                tokenHash: verifyTokenHash,
-                tokenType: 'email_verification',
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            },
-        })
-
-        // Fire-and-forget: send welcome + verification emails concurrently
-        Promise.all([
-            sendWelcomeEmail(user.email, user.name),
-            sendVerificationEmail(user.email, user.name, rawVerifyToken),
-        ]).catch((err) => console.error('[register] Failed to send emails:', err))
+        // Fire-and-forget: send welcome email
+        sendWelcomeEmail(user.email, user.name).catch((err) => console.error('[register] Failed to send welcome email:', err))
 
         // 7. Create session (sets HttpOnly cookie)
         await createSession(user.id)

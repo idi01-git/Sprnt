@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   User, Mail, Lock, Phone, Calendar,
   Eye, EyeOff, Loader2, Sparkles
 } from 'lucide-react';
-import { CircleCheck, CircleX } from 'lucide-react';
+import { CircleCheck } from 'lucide-react';
+import {
+  getFirebaseAuth,
+  getGoogleProvider,
+} from '@/lib/firebase-client';
 
 const poppins: React.CSSProperties = { fontFamily: "'Poppins', sans-serif" };
 const outfit: React.CSSProperties = { fontFamily: "'Outfit', sans-serif" };
@@ -60,8 +64,15 @@ function FieldError({ errors }: { errors?: string[] }) {
   return <p className="text-red-500 text-xs mt-1" style={poppins}>{errors.join(' ')}</p>;
 }
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Get redirect URL from query params, default to dashboard
+  const redirectUrl = searchParams.get('redirect') || '/dashboard';
+  
+  // Get referral code from URL if present
+  const urlReferralCode = searchParams.get('ref') || '';
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -69,7 +80,7 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState('');
   const [dob, setDob] = useState('');
   const [studyLevel, setStudyLevel] = useState('');
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(urlReferralCode);
   const [showPassword, setShowPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -105,8 +116,7 @@ export default function RegisterPage() {
 
       if (res.ok) {
         setSuccess(true);
-        // Already logged in via session cookie — go to dashboard after brief pause
-        setTimeout(() => router.push('/dashboard'), 2000);
+        setTimeout(() => router.push(redirectUrl), 2000);
       } else {
         const parsed = parseApiError(data, res.status);
         setError(parsed.message);
@@ -116,6 +126,43 @@ export default function RegisterPage() {
     } catch {
       setError('Could not reach the server. Please try again.');
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const auth = getFirebaseAuth()
+      const provider = getGoogleProvider()
+      const result = await import('firebase/auth').then(m => m.signInWithPopup(auth, provider))
+      const idToken = await result.user.getIdToken()
+
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, referralCode: referralCode.trim() || undefined }),
+        credentials: 'include',
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (res.ok) {
+        router.push(redirectUrl)
+      } else {
+        const parsed = parseApiError(data, res.status)
+        setError(parsed.message)
+        setIsLoading(false)
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Google sign-in failed. Please try again.'
+      if (message.includes('popup-closed-by-user') || message.includes('Firebase: Error (auth/popup-closed-by-user)')) {
+        setError('')
+        setIsLoading(false)
+        return
+      }
+      setError(message)
+      setIsLoading(false)
     }
   };
 
@@ -135,11 +182,11 @@ export default function RegisterPage() {
             Redirecting to your dashboard…
           </p>
           <Link
-            href="/dashboard"
+            href={redirectUrl}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-semibold transition-all hover:shadow-lg"
             style={poppins}
           >
-            Go to Dashboard →
+            Continue →
           </Link>
         </div>
       </div>
@@ -184,8 +231,9 @@ export default function RegisterPage() {
 
           <button
             type="button"
-            onClick={() => window.location.href = '/login/google'}
-            className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-all hover:-translate-y-0.5 active:scale-95 mb-4"
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-all hover:-translate-y-0.5 active:scale-95 mb-4 disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ ...poppins, fontSize: '15px' }}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -373,7 +421,7 @@ export default function RegisterPage() {
             {/* Link to login */}
             <p className="text-center text-gray-600 text-sm pt-1" style={poppins}>
               Already have an account?{' '}
-              <Link href="/dashboard" className="text-purple-600 font-semibold hover:text-purple-700 transition-colors">
+              <Link href="/login" className="text-purple-600 font-semibold hover:text-purple-700 transition-colors">
                 LOGIN
               </Link>
             </p>
@@ -386,5 +434,18 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// Wrap in Suspense for useSearchParams
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }

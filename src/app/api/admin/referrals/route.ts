@@ -47,7 +47,20 @@ export async function GET(request: Request) {
             prisma.referral.count({ where }),
         ])
 
-        return createPaginatedResponse(referrals, { total, page, pageSize: limit })
+        // Format referrals to match AdminReferral interface
+        const formattedReferrals = referrals.map(r => ({
+            id: r.id,
+            referrerName: r.referrer.name || 'Unknown',
+            referrerEmail: r.referrer.email || '',
+            refereeName: r.referee.name || 'Unknown',
+            refereeEmail: r.referee.email || '',
+            status: r.status,
+            bonusAmount: Number(r.amount),
+            createdAt: r.registeredAt.toISOString(),
+            convertedAt: r.completedAt?.toISOString() || null,
+        }))
+
+        return createPaginatedResponse({ referrals: formattedReferrals }, { total, page, pageSize: limit })
     } catch (error) {
         if (error instanceof AuthError) {
             return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)

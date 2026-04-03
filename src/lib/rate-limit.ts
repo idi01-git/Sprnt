@@ -90,9 +90,9 @@ export function checkRateLimit(
 // PRESET CONFIGURATIONS
 // =============================================================================
 
-/** Auth endpoints: 10 requests per 15 minutes per IP */
+/** Auth endpoints: 20 requests per 15 minutes per IP (increased for better UX) */
 export const AUTH_RATE_LIMIT: RateLimitConfig = {
-    maxRequests: 10,
+    maxRequests: 20,
     windowMs: 15 * 60 * 1000, // 15 minutes
 }
 

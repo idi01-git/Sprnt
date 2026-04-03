@@ -2,11 +2,13 @@ import { prisma } from '@/lib/db'
 import { requireAdminOrAbove, AuthError } from '@/lib/auth/guards'
 import {
     createSuccessResponse,
+    createErrorResponse,
     badRequest,
     notFound,
     conflict,
     serverError,
     HttpStatus,
+    ErrorCode,
 } from '@/lib/api-response'
 import { adminCreateModuleSchema } from '@/lib/validations/admin'
 
@@ -30,31 +32,28 @@ export async function GET(
             orderBy: { dayNumber: 'asc' },
             select: {
                 id: true,
+                courseId: true,
                 dayNumber: true,
                 title: true,
                 isFreePreview: true,
                 updatedAt: true,
-                // Partial content preview
-                contentText: false, // Don't fetch full content in list
-                videoAssets: {
-                    select: { id: true, durationSeconds: true },
-                },
-                _count: {
-                    select: { videoAssets: true },
-                },
+                contentText: true,
+                youtubeUrl: true,
+                notesPdfUrl: true,
+                createdAt: true,
             },
         })
 
-        // Add content preview manually if needed, or just return metadata
-        const response = modules.map((m) => ({
-            ...m,
-            videoCount: m._count.videoAssets,
-        }))
-
-        return createSuccessResponse(response)
+        return createSuccessResponse({
+            modules: modules.map(m => ({
+                ...m,
+                createdAt: m.createdAt.toISOString(),
+                updatedAt: m.updatedAt.toISOString(),
+            })),
+        })
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[GET /api/admin/courses/[courseId]/modules]', error)
         return serverError()
@@ -105,16 +104,21 @@ export async function POST(
                 courseId: course.id,
                 dayNumber: data.dayNumber,
                 title: data.title,
-                contentText: data.contentText,
-                quizQuestions: data.quizQuestions, // Already validated schema
-                isFreePreview: data.isFreePreview,
+                contentText: data.contentText ?? '',
+                isFreePreview: data.isFreePreview ?? false,
             },
         })
 
-        return createSuccessResponse(module, HttpStatus.CREATED)
+        return createSuccessResponse({
+            module: {
+                ...module,
+                createdAt: module.createdAt.toISOString(),
+                updatedAt: module.updatedAt.toISOString(),
+            },
+        }, HttpStatus.CREATED)
     } catch (error) {
         if (error instanceof AuthError) {
-            return createSuccessResponse(null, HttpStatus.UNAUTHORIZED)
+            return createErrorResponse(ErrorCode.ADMIN_AUTH_REQUIRED, 'Admin authentication required', HttpStatus.UNAUTHORIZED)
         }
         console.error('[POST /api/admin/courses/[courseId]/modules]', error)
         return serverError()

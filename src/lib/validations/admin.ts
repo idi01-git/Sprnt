@@ -249,7 +249,7 @@ const quizQuestionSchema = z.object({
 export const adminCreateModuleSchema = z.object({
     dayNumber: z.number().int().min(1).max(7),
     title: z.string().min(1, 'Title required').max(200),
-    contentText: z.string().min(1, 'Content required'),
+    contentText: z.string().optional().default(''),
     quizQuestions: z.array(quizQuestionSchema).default([]),
     isFreePreview: z.boolean().default(false),
 })
@@ -264,6 +264,8 @@ export const adminUpdateModuleSchema = z.object({
     title: z.string().min(1).max(200).optional(),
     contentText: z.string().min(1).optional(),
     isFreePreview: z.boolean().optional(),
+    youtubeUrl: z.string().url().optional().nullable(),
+    notesPdfUrl: z.string().url().optional().nullable(),
 })
 
 export type AdminUpdateModuleInput = z.infer<typeof adminUpdateModuleSchema>
@@ -519,17 +521,14 @@ export type AdminPromocodeUsageQueryInput = z.infer<typeof adminPromocodeUsageQu
 // ============================================================================
 
 export const adminCreateAdminSchema = z.object({
-    username: z.string().min(3).max(100),
     email: z.string().email().max(255),
     password: z.string().min(8).max(128),
     role: z.enum(['super_admin', 'admin', 'reviewer']),
-    permissions: z.record(z.string(), z.boolean()).optional(),
 })
 export type AdminCreateAdminInput = z.infer<typeof adminCreateAdminSchema>
 
 export const adminUpdateAdminSchema = z.object({
     role: z.enum(['super_admin', 'admin', 'reviewer']).optional(),
-    permissions: z.record(z.string(), z.boolean()).optional(),
     email: z.string().email().max(255).optional(),
 })
 export type AdminUpdateAdminInput = z.infer<typeof adminUpdateAdminSchema>

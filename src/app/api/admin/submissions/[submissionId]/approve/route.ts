@@ -55,51 +55,28 @@ export async function POST(
         else if (grade >= 3.0) certGrade = 'First_Class'
         else certGrade = 'Pass'
 
-        const identity = await prisma.identityVerification.findFirst({ where: { submissionId } })
-
-        const [_, certificate] = await prisma.$transaction([
-            // 1. Update submission status
+        const [, certificate] = await prisma.$transaction([
             prisma.submission.update({
                 where: { id: submissionId },
                 data: { reviewStatus: 'approved', reviewCompletedAt: new Date() },
             }),
 
-            // 2. Create certificate
-            prisma.certificate.create({
-                data: {
-                    certificateId: certId,
-                    enrollmentId: submission.enrollmentId,
-                    userId: submission.userId,
-                    courseId: submission.enrollment.courseId,
-                    studentName: identity?.fullName ?? submission.user.name,
-                    collegeName: identity?.collegeName ?? 'N/A',
-                    courseName: submission.enrollment.course.courseName,
-                    grade: certGrade,
-                    certificateUrl: '', // Placeholder
-                    qrCodeData: `${process.env.NEXT_PUBLIC_BASE_URL}/verify/${certId}`,
-                },
-            }),
-
-            // 3. Update enrollment
             prisma.enrollment.update({
                 where: { id: submission.enrollmentId },
                 data: { certificateIssued: true, certificateId: certId, completedAt: new Date() },
-            }),
-
-            // 4. Create notification
-            prisma.notification.create({
-                data: {
-                    userId: submission.userId,
-                    type: 'certificate_issued',
-                    title: 'Certificate Issued! 🎉',
-                    message: `Your certificate for ${submission.enrollment.course.courseName} has been issued.`,
-                },
             }),
         ])
 
         await logAdminAction(adminId, 'submission_approved', 'submission', submissionId)
 
-        return createSuccessResponse(certificate)
+        return createSuccessResponse({
+            certificateId: certId,
+            grade: certGrade,
+            studentName: submission.user.name,
+            collegeName: 'N/A',
+            courseName: submission.enrollment.course.courseName,
+            qrCodeData: `${process.env.NEXT_PUBLIC_BASE_URL}/verify/${certId}`,
+        })
     } catch (error) {
         if (error instanceof AuthError) {
             return createErrorResponse(

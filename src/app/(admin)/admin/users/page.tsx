@@ -34,7 +34,7 @@ export default function AdminUsersPage() {
     try {
       const response = await getAdminUsers({ search, status: statusFilter === 'all' ? undefined : statusFilter, limit: 50 });
       if (response.success && response.data) {
-        setUsers(response.data.users);
+        setUsers(Array.isArray(response.data.users) ? response.data.users : []);
       }
     } catch (err) {
       console.error(err);
@@ -121,21 +121,28 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white font-bold">
-                          {user.name.charAt(0).toUpperCase()}
+                          {(user.name || user.email).charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900" style={poppins}>{user.name}</p>
+                          <p className="font-semibold text-gray-900" style={poppins}>{user.name || '-'}</p>
                           <p className="text-xs text-gray-500" style={poppins}>{user.email}</p>
+                          {user.phone && <p className="text-xs text-gray-400" style={poppins}>{user.phone}</p>}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-600" style={poppins}>
-                      {user.studyLevel?.replace(/_/g, ' ') || '-'}
+                    <td className="px-6 py-4">
+                      <span className="text-gray-600" style={poppins}>{user.studyLevel?.replace(/_/g, ' ') || '-'}</span>
+                      <div className="text-xs text-gray-400 mt-1" style={poppins}>
+                        {user.enrollmentsCount || 0} enrollments
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`} style={poppins}>
                         {user.status}
                       </span>
+                      <div className="text-xs text-gray-400 mt-1" style={poppins}>
+                        ₹{user.walletBalance?.toFixed(2) || '0.00'} balance
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       {user.emailVerified ? (
@@ -145,7 +152,7 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-gray-500" style={poppins}>
-                      {new Date(user.createdAt).toLocaleDateString()}
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

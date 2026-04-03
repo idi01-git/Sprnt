@@ -35,17 +35,6 @@ export async function POST(
 
         const canResubmit = updated.resubmissionCount < updated.maxResubmissions
 
-        await prisma.notification.create({
-            data: {
-                userId: submission.userId,
-                type: 'submission_rejected',
-                title: 'Submission Requires Changes',
-                message: canResubmit
-                    ? `Your submission was not approved. You can resubmit (${updated.maxResubmissions - updated.resubmissionCount} attempts remaining).`
-                    : `Your submission was not approved. Maximum resubmission attempts reached.`,
-            },
-        })
-
         await logAdminAction(adminId, 'submission_rejected', 'submission', submissionId)
 
         return createSuccessResponse({ message: 'Submission rejected', canResubmit })

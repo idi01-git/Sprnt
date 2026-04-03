@@ -53,7 +53,7 @@ export async function GET(
                 day7Completed: true,
                 projectSubmissionDeadline: true,
                 certificateIssued: true,
-                certificateUrl: true,
+                certificateId: true,
                 enrolledAt: true,
                 completedAt: true,
                 course: {
@@ -76,11 +76,6 @@ export async function GET(
                         submittedAt: true,
                         resubmissionCount: true,
                         maxResubmissions: true,
-                    },
-                },
-                _count: {
-                    select: {
-                        dailyProgress: { where: { quizPassed: true } },
                     },
                 },
             },
@@ -119,10 +114,9 @@ export async function GET(
                 discountAmount: Number(enrollment.discountAmount),
                 currentDay: enrollment.currentDay,
                 day7Completed: enrollment.day7Completed,
-                daysCompleted: enrollment._count.dailyProgress,
                 projectSubmissionDeadline: enrollment.projectSubmissionDeadline,
                 certificateIssued: enrollment.certificateIssued,
-                certificateUrl: enrollment.certificateUrl,
+                certificateId: enrollment.certificateId,
                 enrolledAt: enrollment.enrolledAt,
                 completedAt: enrollment.completedAt,
                 status: enrollment.completedAt ? 'completed' : 'in_progress',

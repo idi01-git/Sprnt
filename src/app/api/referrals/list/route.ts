@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
                     status: true,
                     amount: true,
                     registeredAt: true,
-                    paymentCompletedAt: true,
-                    withdrawalEligibleAt: true,
+                    completedAt: true,
+                    autoApproveAt: true,
                     referee: {
                         select: {
                             name: true,
@@ -58,16 +58,17 @@ export async function GET(request: NextRequest) {
             }),
         ])
 
+        // Format referrals to match Referral interface
         const formattedReferrals = referrals.map((r) => ({
             id: r.id,
-            refereeName: r.referee.name,
-            refereeEmail: maskEmail(r.referee.email),
-            refereeAvatar: r.referee.avatarUrl,
+            referredUserEmail: maskEmail(r.referee.email),
+            referredUserName: r.referee.name,
             status: r.status,
-            amount: Number(r.amount),
-            registeredAt: r.registeredAt,
-            paymentCompletedAt: r.paymentCompletedAt,
-            withdrawalEligibleAt: r.withdrawalEligibleAt,
+            bonusAmount: Number(r.amount),
+            enrolledCourseName: null, // Course name not easily available without another join
+            createdAt: r.registeredAt.toISOString(),
+            convertedAt: r.completedAt?.toISOString() || null,
+            autoApproveAt: r.autoApproveAt?.toISOString() || null,
         }))
 
         return createPaginatedResponse(
